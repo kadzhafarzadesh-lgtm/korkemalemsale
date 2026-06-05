@@ -265,8 +265,9 @@ function MonthPage() {
                           </td>
                           <td className="p-0">
                             <Cell
-                              value={c?.hasActual ? c.actual : 0}
+                              value={c?.hasActual ? (c.actual as number) : 0}
                               placeholder={c?.hasActual ? undefined : "—"}
+                              showEmpty={!c?.hasActual}
                               onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
                             />
                           </td>
@@ -276,7 +277,7 @@ function MonthPage() {
                               (isNeg ? "text-destructive" : "text-foreground")
                             }
                           >
-                            {c?.hasActual ? fmt(c.realized) : "—"}
+                            {c?.realized != null ? fmt(c.realized) : "—"}
                           </td>
                         </Fragment>
                       );
