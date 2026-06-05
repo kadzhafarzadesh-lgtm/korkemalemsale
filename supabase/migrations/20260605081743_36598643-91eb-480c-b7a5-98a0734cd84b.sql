@@ -1,0 +1,1 @@
+ALTER TABLE public.daily_entries ALTER COLUMN actual_balance DROP NOT NULL, ALTER COLUMN actual_balance DROP DEFAULT;
