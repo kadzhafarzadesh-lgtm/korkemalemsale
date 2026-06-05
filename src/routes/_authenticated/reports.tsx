@@ -190,7 +190,7 @@ function ReportsPage() {
         </TabsList>
 
         <TabsContent value="sales" className="space-y-3">
-          <div className="flex justify-end"><Button onClick={exportSales}><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
+          <div className="flex md:justify-end"><Button onClick={exportSales} className="w-full md:w-auto h-11 md:h-9"><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/60"><tr>
@@ -233,7 +233,7 @@ function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="ranking" className="space-y-3">
-          <div className="flex justify-end"><Button onClick={exportRanking}><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
+          <div className="flex md:justify-end"><Button onClick={exportRanking} className="w-full md:w-auto h-11 md:h-9"><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/60"><tr>
@@ -252,7 +252,7 @@ function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="detail" className="space-y-3">
-          <div className="flex justify-end"><Button onClick={exportDetailed}><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
+          <div className="flex md:justify-end"><Button onClick={exportDetailed} className="w-full md:w-auto h-11 md:h-9"><Download className="w-4 h-4 mr-2" />Скачать Excel</Button></div>
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/60"><tr>
