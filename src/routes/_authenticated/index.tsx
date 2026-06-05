@@ -23,7 +23,7 @@ type RawEntry = {
   posted: number;
   returned: number;
   opening_balance: number;
-  actual_balance: number;
+  actual_balance: number | null;
 };
 
 type Entry = {
@@ -53,7 +53,7 @@ function Dashboard() {
     },
   });
 
-  // Реал. = Нач + Пост − Возвр − Факт (по дню), агрегируем по (store, ptype, month).
+  // Реал. = Нач + Пост − Возвр − Факт (с автоподстановкой Факт. = предыдущий).
   const entries: Entry[] = useMemo(() => {
     const grouped = new Map<string, RawEntry[]>();
     for (const e of rawEntries) {
@@ -65,21 +65,23 @@ function Dashboard() {
     for (const [k, list] of grouped) {
       const [store_id, product_type_id, monthStr] = k.split("|");
       list.sort((a, b) => a.day - b.day);
-      const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
-      let prevActual = opening;
+      const opening = +(list.find((d) => d.day === 1)?.opening_balance ?? 0);
+      let prevEffective: number = opening;
       let posted = 0, returned = 0, realized = 0;
       for (const d of list) {
-        const base = d.day === 1 ? opening : prevActual;
-        const actual = +d.actual_balance;
-        realized += base + (+d.posted) - (+d.returned) - actual;
+        const base = d.day === 1 ? opening : prevEffective;
+        const manual = d.actual_balance == null ? null : +d.actual_balance;
+        const effective = manual != null ? manual : base;
+        realized += base + (+d.posted) - (+d.returned) - effective;
         posted += +d.posted;
         returned += +d.returned;
-        prevActual = actual;
+        prevEffective = effective;
       }
       out.push({ store_id, product_type_id, year, month: Number(monthStr), posted, returned, realized });
     }
     return out;
   }, [rawEntries, year]);
+
 
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],

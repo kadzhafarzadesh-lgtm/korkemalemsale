@@ -19,7 +19,7 @@ type Entry = {
   day: number;
   posted: number;
   returned: number;
-  actual_balance: number;
+  actual_balance: number | null;
   realized: number;
   opening_balance: number;
 };
@@ -90,33 +90,45 @@ function MonthPage() {
     byKey.get(`${storeId}|${ptypeId}|${d}`);
 
   // ФОРМУЛЫ:
-  // Нач.ост. дня 1 = opening_balance (ручной ввод).
-  // Нач.ост. дня N = Факт.ост. дня (N-1), только если Факт.ост.(N-1) введён.
-  // Реал. = Нач.ост. + Пост. − Возвр. − Факт.ост. — только если Факт.ост. введён И Нач.ост. известен.
+  // Нач.ост. дня 1 = opening_balance.
+  // Нач.ост. дня N = effective Факт. дня (N-1).
+  // Факт.(автоподстановка) = последний введённый Факт. (или Нач.ост.) если в этот день не введён.
+  // Реал. = Нач.ост. + Пост. − Возвр. − Факт.(effective)
   type Computed = {
     posted: number;
     returned: number;
-    actual: number | null;
-    base: number | null;
+    manual: number | null;       // введён вручную (или null)
+    effective: number | null;    // факт. с учётом автозаполнения
+    base: number | null;         // нач.ост. дня
     realized: number | null;
-    hasActual: boolean;
+    isAuto: boolean;             // отображать ли серым
   };
   const computed = useMemo(() => {
     const map = new Map<string, Computed>();
     for (const { store, ptype } of rows) {
-      const opening = +(getDay(store.id, ptype.id, 1)?.opening_balance ?? 0);
-      let prevActual: number | null = opening;
+      const openingRaw = getDay(store.id, ptype.id, 1)?.opening_balance;
+      const hasOpening = openingRaw != null && !Number.isNaN(+openingRaw);
+      const opening: number | null = hasOpening ? +openingRaw! : null;
+      let prevEffective: number | null = opening;
       for (let d = 1; d <= days; d++) {
         const e = getDay(store.id, ptype.id, d);
         const posted = +(e?.posted ?? 0);
         const returned = +(e?.returned ?? 0);
-        const base: number | null = d === 1 ? opening : prevActual;
-        const hasActual = e != null && e.actual_balance != null && !Number.isNaN(+e.actual_balance);
-        const actual: number | null = hasActual ? +e!.actual_balance : null;
+        const manualRaw = e?.actual_balance;
+        const hasManual = manualRaw != null && !Number.isNaN(+manualRaw);
+        const manual: number | null = hasManual ? +manualRaw! : null;
+
+        const base: number | null = d === 1 ? opening : prevEffective;
+        const effective: number | null = manual != null ? manual : base;
+        const isAuto = manual == null && effective != null;
+
         const realized: number | null =
-          hasActual && base != null ? base + posted - returned - (actual as number) : null;
-        map.set(`${store.id}|${ptype.id}|${d}`, { posted, returned, actual, base, realized, hasActual });
-        prevActual = hasActual ? (actual as number) : null;
+          base != null && effective != null ? base + posted - returned - effective : null;
+
+        map.set(`${store.id}|${ptype.id}|${d}`, {
+          posted, returned, manual, effective, base, realized, isAuto,
+        });
+        prevEffective = effective;
       }
     }
     return map;
@@ -129,10 +141,10 @@ function MonthPage() {
     ptypeId: string,
     day: number,
     field: "posted" | "returned" | "opening_balance" | "actual_balance",
-    value: number,
+    value: number | null,
   ) => {
     const existing = getDay(storeId, ptypeId, day);
-    const payload: Entry = {
+    const payload: any = {
       ...(existing ?? {
         store_id: storeId,
         product_type_id: ptypeId,
@@ -141,12 +153,12 @@ function MonthPage() {
         day,
         posted: 0,
         returned: 0,
-        actual_balance: 0,
+        actual_balance: null,
         realized: 0,
         opening_balance: 0,
       }),
       [field]: value,
-    } as Entry;
+    };
 
     const { error } = await supabase
       .from("daily_entries")
@@ -160,7 +172,7 @@ function MonthPage() {
     qc.invalidateQueries({ queryKey: ["report-entries", year, m] });
   };
 
-  // Totals по дням — Реал. суммируется только по введённым Факт.
+  // Totals по дням — Реал. с учётом автоподстановки.
   const dayTotals = useMemo(() => {
     const t = new Array(days + 1).fill(0).map(() => ({ posted: 0, returned: 0, realized: 0 }));
     for (const { store, ptype } of rows) {
@@ -190,7 +202,7 @@ function MonthPage() {
       <div>
         <h1 className="text-2xl font-semibold">{MONTHS[m - 1]} {year}</h1>
         <p className="text-sm text-muted-foreground">
-          Введите Пост., Возвр. и Факт.ост. — Нач.ост. и Реал. считаются автоматически.
+          Введите Пост., Возвр. и Факт.ост. Серым показан автоподставленный Факт. (последний введённый).
         </p>
       </div>
 
@@ -243,7 +255,7 @@ function MonthPage() {
                     <td className="border-r p-0">
                       <Cell
                         value={opening}
-                        onSave={(v) => saveCell(row.store.id, row.ptype.id, 1, "opening_balance", v)}
+                        onSave={(v) => saveCell(row.store.id, row.ptype.id, 1, "opening_balance", v ?? 0)}
                       />
                     </td>
                     {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
@@ -254,20 +266,20 @@ function MonthPage() {
                           <td className="p-0">
                             <Cell
                               value={c?.posted ?? 0}
-                              onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "posted", v)}
+                              onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "posted", v ?? 0)}
                             />
                           </td>
                           <td className="p-0">
                             <Cell
                               value={c?.returned ?? 0}
-                              onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v)}
+                              onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v ?? 0)}
                             />
                           </td>
                           <td className="p-0">
                             <Cell
-                              value={c?.hasActual ? (c.actual as number) : 0}
-                              placeholder={c?.hasActual ? undefined : "—"}
-                              showEmpty={!c?.hasActual}
+                              value={c?.manual ?? null}
+                              autoValue={c?.isAuto ? (c.effective as number) : null}
+                              nullable
                               onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
                             />
                           </td>
@@ -325,34 +337,58 @@ function Stat({ label, value }: { label: string; value: string }) {
 function Cell({
   value,
   onSave,
-  placeholder,
-  showEmpty,
+  autoValue,
+  nullable,
 }: {
-  value: number;
-  onSave: (v: number) => void | Promise<void>;
-  placeholder?: string;
-  showEmpty?: boolean;
+  value: number | null;
+  onSave: (v: number | null) => void | Promise<void>;
+  autoValue?: number | null;
+  nullable?: boolean;
 }) {
-  const [v, setV] = useState(showEmpty ? "" : String(value || ""));
-  const original = useRef(value);
+  // Если value=null и есть autoValue — показываем автоподстановку серым.
+  const displayAuto = value == null && autoValue != null;
+  const [v, setV] = useState(value != null ? String(value) : "");
+  const [focused, setFocused] = useState(false);
+  const original = useRef<number | null>(value);
   useEffect(() => {
-    setV(showEmpty ? "" : value ? String(value) : "");
+    setV(value != null ? String(value) : "");
     original.current = value;
-  }, [value, showEmpty]);
+  }, [value]);
+
+  const shown = focused
+    ? v
+    : value != null
+    ? String(value)
+    : displayAuto
+    ? String(autoValue)
+    : "";
+
   return (
     <input
-      value={v}
-      placeholder={placeholder}
+      value={shown}
+      onFocus={() => setFocused(true)}
       onChange={(e) => setV(e.target.value.replace(/[^\d.,-]/g, ""))}
       onBlur={() => {
-        if (v === "") return;
-        const n = parseFloat(v.replace(",", ".")) || 0;
+        setFocused(false);
+        const trimmed = v.trim();
+        if (trimmed === "") {
+          if (nullable) {
+            if (original.current != null) onSave(null);
+          } else {
+            if (original.current !== 0) onSave(0);
+          }
+          return;
+        }
+        const n = parseFloat(trimmed.replace(",", ".")) || 0;
         if (n !== original.current) onSave(n);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
-      className="w-14 px-1 py-1 text-right text-xs bg-transparent focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring rounded placeholder:text-muted-foreground/60"
+      className={
+        "w-14 px-1 py-1 text-right text-xs bg-transparent focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring rounded " +
+        (!focused && displayAuto ? "text-[#9ca3af]" : "")
+      }
       inputMode="decimal"
     />
   );

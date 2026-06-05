@@ -44,8 +44,9 @@ function ReportsPage() {
   type Row = { store_id: string; product_type_id: string; posted: number; returned: number; realized: number; opening: number; closing: number };
 
   // Все магазины × типы (с учётом фильтров), даже без данных за месяц → нули.
+  // Учитываем автоподстановку Факт.ост.: если за день не введён — берём предыдущий.
   const filteredSales: Row[] = useMemo(() => {
-    type Day = { day: number; posted: number; returned: number; actual_balance: number; opening_balance: number };
+    type Day = { day: number; posted: number; returned: number; actual_balance: number | null; opening_balance: number };
     const grouped = new Map<string, Day[]>();
     for (const e of entries) {
       const k = `${e.store_id}|${e.product_type_id}`;
@@ -54,7 +55,7 @@ function ReportsPage() {
         day: e.day,
         posted: +e.posted,
         returned: +e.returned,
-        actual_balance: +e.actual_balance,
+        actual_balance: e.actual_balance == null ? null : +e.actual_balance,
         opening_balance: +e.opening_balance,
       });
     }
@@ -65,23 +66,23 @@ function ReportsPage() {
       for (const p of fTypes) {
         const list = (grouped.get(`${s.id}|${p.id}`) ?? []).slice().sort((a, b) => a.day - b.day);
         const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
-        let prevActual = opening;
+        let prevEffective: number = opening;
         let posted = 0, returned = 0, realized = 0, closing = opening;
         for (const d of list) {
-          const base = d.day === 1 ? opening : prevActual;
-          const actual = d.actual_balance;
-          // Реал. = Нач + Пост − Возвр − Факт
-          realized += base + d.posted - d.returned - actual;
+          const base = d.day === 1 ? opening : prevEffective;
+          const effective = d.actual_balance != null ? d.actual_balance : base;
+          realized += base + d.posted - d.returned - effective;
           posted += d.posted;
           returned += d.returned;
-          prevActual = actual;
-          closing = actual;
+          prevEffective = effective;
+          closing = effective;
         }
         result.push({ store_id: s.id, product_type_id: p.id, posted, returned, realized, opening, closing });
       }
     }
     return result;
   }, [entries, stores, ptypes, store, ptype]);
+
 
   const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? "—";
   const ptName = (id: string) => ptypes.find(p => p.id === id)?.name ?? "—";
