@@ -90,26 +90,33 @@ function MonthPage() {
     byKey.get(`${storeId}|${ptypeId}|${d}`);
 
   // ФОРМУЛЫ:
-  // Нач.ост. дня N = Факт.ост. дня (N-1); для дня 1 = opening_balance (вводится вручную).
-  // Реал. дня N = Нач.ост. + Пост. − Возвр. − Факт.ост.
-  // Факт.ост. — поле ВВОДА. Если запись за день не сохранена — Реал. = "—".
-  type Computed = { posted: number; returned: number; actual: number; realized: number; hasActual: boolean; base: number };
+  // Нач.ост. дня 1 = opening_balance (ручной ввод).
+  // Нач.ост. дня N = Факт.ост. дня (N-1), только если Факт.ост.(N-1) введён.
+  // Реал. = Нач.ост. + Пост. − Возвр. − Факт.ост. — только если Факт.ост. введён И Нач.ост. известен.
+  type Computed = {
+    posted: number;
+    returned: number;
+    actual: number | null;
+    base: number | null;
+    realized: number | null;
+    hasActual: boolean;
+  };
   const computed = useMemo(() => {
     const map = new Map<string, Computed>();
     for (const { store, ptype } of rows) {
       const opening = +(getDay(store.id, ptype.id, 1)?.opening_balance ?? 0);
-      let prevActual = opening;
+      let prevActual: number | null = opening;
       for (let d = 1; d <= days; d++) {
         const e = getDay(store.id, ptype.id, d);
         const posted = +(e?.posted ?? 0);
         const returned = +(e?.returned ?? 0);
-        const base = d === 1 ? opening : prevActual;
-        const hasActual = !!e;
-        // Если факт не введён, для непрерывности цепочки берём расчётный остаток (как если бы реализации не было).
-        const actual = hasActual ? +(e!.actual_balance ?? 0) : base + posted - returned;
-        const realized = base + posted - returned - actual;
-        map.set(`${store.id}|${ptype.id}|${d}`, { posted, returned, actual, realized, hasActual, base });
-        prevActual = actual;
+        const base: number | null = d === 1 ? opening : prevActual;
+        const hasActual = e != null && e.actual_balance != null && !Number.isNaN(+e.actual_balance);
+        const actual: number | null = hasActual ? +e!.actual_balance : null;
+        const realized: number | null =
+          hasActual && base != null ? base + posted - returned - (actual as number) : null;
+        map.set(`${store.id}|${ptype.id}|${d}`, { posted, returned, actual, base, realized, hasActual });
+        prevActual = hasActual ? (actual as number) : null;
       }
     }
     return map;
@@ -153,7 +160,7 @@ function MonthPage() {
     qc.invalidateQueries({ queryKey: ["report-entries", year, m] });
   };
 
-  // Totals по дням
+  // Totals по дням — Реал. суммируется только по введённым Факт.
   const dayTotals = useMemo(() => {
     const t = new Array(days + 1).fill(0).map(() => ({ posted: 0, returned: 0, realized: 0 }));
     for (const { store, ptype } of rows) {
@@ -162,7 +169,7 @@ function MonthPage() {
         if (!c) continue;
         t[d].posted += c.posted;
         t[d].returned += c.returned;
-        if (c.hasActual) t[d].realized += c.realized;
+        if (c.realized != null) t[d].realized += c.realized;
       }
     }
     return t;
@@ -241,7 +248,7 @@ function MonthPage() {
                     </td>
                     {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
                       const c = getComp(row.store.id, row.ptype.id, d);
-                      const isNeg = c?.hasActual && (c?.realized ?? 0) < 0;
+                      const isNeg = c?.realized != null && c.realized < 0;
                       return (
                         <Fragment key={d}>
                           <td className="p-0">
@@ -258,8 +265,9 @@ function MonthPage() {
                           </td>
                           <td className="p-0">
                             <Cell
-                              value={c?.hasActual ? c.actual : 0}
+                              value={c?.hasActual ? (c.actual as number) : 0}
                               placeholder={c?.hasActual ? undefined : "—"}
+                              showEmpty={!c?.hasActual}
                               onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
                             />
                           </td>
@@ -269,7 +277,7 @@ function MonthPage() {
                               (isNeg ? "text-destructive" : "text-foreground")
                             }
                           >
-                            {c?.hasActual ? fmt(c.realized) : "—"}
+                            {c?.realized != null ? fmt(c.realized) : "—"}
                           </td>
                         </Fragment>
                       );
@@ -318,23 +326,26 @@ function Cell({
   value,
   onSave,
   placeholder,
+  showEmpty,
 }: {
   value: number;
   onSave: (v: number) => void | Promise<void>;
   placeholder?: string;
+  showEmpty?: boolean;
 }) {
-  const [v, setV] = useState(String(value || ""));
+  const [v, setV] = useState(showEmpty ? "" : String(value || ""));
   const original = useRef(value);
   useEffect(() => {
-    setV(value ? String(value) : "");
+    setV(showEmpty ? "" : value ? String(value) : "");
     original.current = value;
-  }, [value]);
+  }, [value, showEmpty]);
   return (
     <input
       value={v}
       placeholder={placeholder}
       onChange={(e) => setV(e.target.value.replace(/[^\d.,-]/g, ""))}
       onBlur={() => {
+        if (v === "") return;
         const n = parseFloat(v.replace(",", ".")) || 0;
         if (n !== original.current) onSave(n);
       }}
