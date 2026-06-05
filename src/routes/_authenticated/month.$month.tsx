@@ -89,12 +89,13 @@ function MonthPage() {
   const getDay = (storeId: string, ptypeId: string, d: number) =>
     byKey.get(`${storeId}|${ptypeId}|${d}`);
 
-  // Compute actual_balance and realized for each day client-side.
-  // actual_balance(d) = actual_balance(d-1) + posted(d) - returned(d), where actual_balance(0) = opening_balance(day1)
-  // realized(d) = max(0, actual_balance(d-1) - actual_balance(d))   (для дня 1: opening - actual(1))
-  type Computed = { posted: number; returned: number; actual: number; realized: number; hasData: boolean };
+  // ФОРМУЛЫ:
+  // Нач.ост. дня N = Факт.ост. дня (N-1); для дня 1 = opening_balance (вводится вручную).
+  // Реал. дня N = Нач.ост. + Пост. − Возвр. − Факт.ост.
+  // Факт.ост. — поле ВВОДА. Если запись за день не сохранена — Реал. = "—".
+  type Computed = { posted: number; returned: number; actual: number; realized: number; hasActual: boolean; base: number };
   const computed = useMemo(() => {
-    const map = new Map<string, Computed>(); // key store|ptype|day
+    const map = new Map<string, Computed>();
     for (const { store, ptype } of rows) {
       const opening = +(getDay(store.id, ptype.id, 1)?.opening_balance ?? 0);
       let prevActual = opening;
@@ -103,10 +104,11 @@ function MonthPage() {
         const posted = +(e?.posted ?? 0);
         const returned = +(e?.returned ?? 0);
         const base = d === 1 ? opening : prevActual;
-        const actual = base + posted - returned;
-        const realized = Math.max(0, base - actual);
-        const hasData = !!e || posted !== 0 || returned !== 0;
-        map.set(`${store.id}|${ptype.id}|${d}`, { posted, returned, actual, realized, hasData });
+        const hasActual = !!e;
+        // Если факт не введён, для непрерывности цепочки берём расчётный остаток (как если бы реализации не было).
+        const actual = hasActual ? +(e!.actual_balance ?? 0) : base + posted - returned;
+        const realized = base + posted - returned - actual;
+        map.set(`${store.id}|${ptype.id}|${d}`, { posted, returned, actual, realized, hasActual, base });
         prevActual = actual;
       }
     }
@@ -119,7 +121,7 @@ function MonthPage() {
     storeId: string,
     ptypeId: string,
     day: number,
-    field: "posted" | "returned" | "opening_balance",
+    field: "posted" | "returned" | "opening_balance" | "actual_balance",
     value: number,
   ) => {
     const existing = getDay(storeId, ptypeId, day);
@@ -147,9 +149,11 @@ function MonthPage() {
       return;
     }
     qc.invalidateQueries({ queryKey: ["entries", year, m] });
+    qc.invalidateQueries({ queryKey: ["dash-entries", year] });
+    qc.invalidateQueries({ queryKey: ["report-entries", year, m] });
   };
 
-  // Totals
+  // Totals по дням
   const dayTotals = useMemo(() => {
     const t = new Array(days + 1).fill(0).map(() => ({ posted: 0, returned: 0, realized: 0 }));
     for (const { store, ptype } of rows) {
@@ -158,7 +162,7 @@ function MonthPage() {
         if (!c) continue;
         t[d].posted += c.posted;
         t[d].returned += c.returned;
-        t[d].realized += c.realized;
+        if (c.hasActual) t[d].realized += c.realized;
       }
     }
     return t;
@@ -179,7 +183,7 @@ function MonthPage() {
       <div>
         <h1 className="text-2xl font-semibold">{MONTHS[m - 1]} {year}</h1>
         <p className="text-sm text-muted-foreground">
-          Кликните по ячейке, чтобы изменить значение. Реализация считается автоматически.
+          Введите Пост., Возвр. и Факт.ост. — Нач.ост. и Реал. считаются автоматически.
         </p>
       </div>
 
@@ -237,6 +241,7 @@ function MonthPage() {
                     </td>
                     {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
                       const c = getComp(row.store.id, row.ptype.id, d);
+                      const isNeg = c?.hasActual && (c?.realized ?? 0) < 0;
                       return (
                         <Fragment key={d}>
                           <td className="p-0">
@@ -251,11 +256,20 @@ function MonthPage() {
                               onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v)}
                             />
                           </td>
-                          <td className="px-2 py-1 text-right text-muted-foreground bg-muted/20">
-                            {fmt(c?.actual ?? 0)}
+                          <td className="p-0">
+                            <Cell
+                              value={c?.hasActual ? c.actual : 0}
+                              placeholder={c?.hasActual ? undefined : "—"}
+                              onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
+                            />
                           </td>
-                          <td className="px-2 py-1 text-right text-foreground bg-accent/5 border-r font-medium">
-                            {fmt(c?.realized ?? 0)}
+                          <td
+                            className={
+                              "px-2 py-1 text-right border-r font-medium bg-accent/5 " +
+                              (isNeg ? "text-destructive" : "text-foreground")
+                            }
+                          >
+                            {c?.hasActual ? fmt(c.realized) : "—"}
                           </td>
                         </Fragment>
                       );
@@ -300,7 +314,15 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Cell({ value, onSave }: { value: number; onSave: (v: number) => void | Promise<void> }) {
+function Cell({
+  value,
+  onSave,
+  placeholder,
+}: {
+  value: number;
+  onSave: (v: number) => void | Promise<void>;
+  placeholder?: string;
+}) {
   const [v, setV] = useState(String(value || ""));
   const original = useRef(value);
   useEffect(() => {
@@ -310,6 +332,7 @@ function Cell({ value, onSave }: { value: number; onSave: (v: number) => void | 
   return (
     <input
       value={v}
+      placeholder={placeholder}
       onChange={(e) => setV(e.target.value.replace(/[^\d.,-]/g, ""))}
       onBlur={() => {
         const n = parseFloat(v.replace(",", ".")) || 0;
@@ -318,7 +341,7 @@ function Cell({ value, onSave }: { value: number; onSave: (v: number) => void | 
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
-      className="w-14 px-1 py-1 text-right text-xs bg-transparent focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring rounded"
+      className="w-14 px-1 py-1 text-right text-xs bg-transparent focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring rounded placeholder:text-muted-foreground/60"
       inputMode="decimal"
     />
   );

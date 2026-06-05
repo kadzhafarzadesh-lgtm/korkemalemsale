@@ -23,6 +23,7 @@ type RawEntry = {
   posted: number;
   returned: number;
   opening_balance: number;
+  actual_balance: number;
 };
 
 type Entry = {
@@ -44,7 +45,7 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance")
+        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
         .eq("year", year)
         .limit(50000);
       if (error) throw error;
@@ -52,7 +53,7 @@ function Dashboard() {
     },
   });
 
-  // Aggregate to per (store, ptype, month) computing realized client-side.
+  // Реал. = Нач + Пост − Возвр − Факт (по дню), агрегируем по (store, ptype, month).
   const entries: Entry[] = useMemo(() => {
     const grouped = new Map<string, RawEntry[]>();
     for (const e of rawEntries) {
@@ -69,8 +70,8 @@ function Dashboard() {
       let posted = 0, returned = 0, realized = 0;
       for (const d of list) {
         const base = d.day === 1 ? opening : prevActual;
-        const actual = base + (+d.posted) - (+d.returned);
-        realized += Math.max(0, base - actual);
+        const actual = +d.actual_balance;
+        realized += base + (+d.posted) - (+d.returned) - actual;
         posted += +d.posted;
         returned += +d.returned;
         prevActual = actual;
@@ -134,6 +135,8 @@ function Dashboard() {
 
 
   const COLORS = ["hsl(200 60% 45%)", "hsl(150 50% 45%)", "hsl(250 50% 50%)", "hsl(25 70% 55%)", "hsl(280 50% 55%)"];
+  const TYPE_COLORS: Record<string, string> = { "сер.": "#3b82f6", "вар.": "#f97316" };
+  const byTypeTotal = byType.reduce((s, t) => s + t.value, 0);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -185,14 +188,36 @@ function Dashboard() {
             <Card className="p-4">
               <h3 className="font-medium mb-3">Реализация по типу</h3>
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={byType} dataKey="value" nameKey="name" outerRadius={90} label={(d: any) => d.name}>
-                      {byType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                {byTypeTotal === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Нет данных
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={byType}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={90}
+                        label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      >
+                        {byType.map((t, i) => (
+                          <Cell key={i} fill={TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: any) => fmt(Number(v))} />
+                      <Legend
+                        wrapperStyle={{ fontSize: 12 }}
+                        formatter={(value: string) => {
+                          const item = byType.find((b) => b.name === value);
+                          const pct = item && byTypeTotal > 0 ? ((item.value / byTypeTotal) * 100).toFixed(1) : "0";
+                          return `${value} — ${pct}%`;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </Card>
           </div>
