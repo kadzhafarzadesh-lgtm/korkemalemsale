@@ -248,7 +248,7 @@ function MonthPage() {
                     </td>
                     {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
                       const c = getComp(row.store.id, row.ptype.id, d);
-                      const isNeg = c?.hasActual && (c?.realized ?? 0) < 0;
+                      const isNeg = c?.realized != null && c.realized < 0;
                       return (
                         <Fragment key={d}>
                           <td className="p-0">
