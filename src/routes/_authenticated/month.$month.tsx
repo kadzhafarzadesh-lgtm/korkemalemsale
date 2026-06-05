@@ -326,23 +326,26 @@ function Cell({
   value,
   onSave,
   placeholder,
+  showEmpty,
 }: {
   value: number;
   onSave: (v: number) => void | Promise<void>;
   placeholder?: string;
+  showEmpty?: boolean;
 }) {
-  const [v, setV] = useState(String(value || ""));
+  const [v, setV] = useState(showEmpty ? "" : String(value || ""));
   const original = useRef(value);
   useEffect(() => {
-    setV(value ? String(value) : "");
+    setV(showEmpty ? "" : value ? String(value) : "");
     original.current = value;
-  }, [value]);
+  }, [value, showEmpty]);
   return (
     <input
       value={v}
       placeholder={placeholder}
       onChange={(e) => setV(e.target.value.replace(/[^\d.,-]/g, ""))}
       onBlur={() => {
+        if (v === "") return;
         const n = parseFloat(v.replace(",", ".")) || 0;
         if (n !== original.current) onSave(n);
       }}
