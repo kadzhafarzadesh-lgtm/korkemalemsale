@@ -172,7 +172,24 @@ function Dashboard() {
           <div className="grid lg:grid-cols-3 gap-4">
             <Card className="p-4 lg:col-span-2">
               <h3 className="font-medium mb-3">Динамика по месяцам</h3>
-              <div className="h-72">
+              <div className="h-52 md:h-72">
+                <div className="md:hidden h-full overflow-x-auto">
+                  <div style={{ width: 600, height: "100%" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthly}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="name" fontSize={11} />
+                        <YAxis fontSize={11} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="Поступления" fill={COLORS[0]} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Возвраты" fill={COLORS[3]} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Реализация" fill={COLORS[1]} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="hidden md:block h-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthly}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
@@ -185,11 +202,12 @@ function Dashboard() {
                     <Bar dataKey="Реализация" fill={COLORS[1]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             </Card>
             <Card className="p-4">
               <h3 className="font-medium mb-3">Реализация по типу</h3>
-              <div className="h-72">
+              <div className="h-52 md:h-72">
                 {byTypeTotal === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                     Нет данных
@@ -241,7 +259,7 @@ function Dashboard() {
                   {topStores.map((s, i) => (
                     <tr key={s.id} className="border-b last:border-0 hover:bg-muted/40">
                       <td className="py-2 px-2 font-medium">{i + 1}</td>
-                      <td className="py-2 px-2">{s.name}</td>
+                      <td className="py-2 px-2"><span className="md:hidden">{s.name.length > 20 ? s.name.slice(0, 19) + "…" : s.name}</span><span className="hidden md:inline">{s.name}</span></td>
                       <td className="py-2 px-2 text-right num">{fmt(s.realized)}</td>
                       <td className="py-2 px-2 text-right num">{s.retPct.toFixed(1)}%</td>
                       <td className="py-2 px-2 text-right num">{s.share.toFixed(1)}%</td>
