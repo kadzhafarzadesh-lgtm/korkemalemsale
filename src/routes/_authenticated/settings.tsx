@@ -34,7 +34,7 @@ function SettingsPage() {
         <p className="text-sm text-muted-foreground">Управление пользователями, магазинами и типами продукции</p>
       </div>
       <Tabs defaultValue="users">
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto flex justify-start">
           <TabsTrigger value="users">Пользователи</TabsTrigger>
           <TabsTrigger value="stores">Магазины</TabsTrigger>
           <TabsTrigger value="ptypes">Типы продукции</TabsTrigger>
