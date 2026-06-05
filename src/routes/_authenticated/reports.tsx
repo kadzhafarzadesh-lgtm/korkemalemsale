@@ -152,18 +152,18 @@ function ReportsPage() {
         <p className="text-sm text-muted-foreground">Сводные отчёты с возможностью выгрузки в Excel</p>
       </div>
 
-      <Card className="p-4 grid sm:grid-cols-3 gap-3">
+      <Card className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label className="text-xs text-muted-foreground">Месяц</label>
           <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
             <SelectContent>{MONTHS.map((mn, i) => <SelectItem key={i} value={String(i + 1)}>{mn}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Тип продукции</label>
           <Select value={ptype} onValueChange={setPtype}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все</SelectItem>
               {ptypes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -173,7 +173,7 @@ function ReportsPage() {
         <div>
           <label className="text-xs text-muted-foreground">Магазин</label>
           <Select value={store} onValueChange={setStore}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все</SelectItem>
               {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -183,7 +183,7 @@ function ReportsPage() {
       </Card>
 
       <Tabs defaultValue="sales">
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto flex justify-start">
           <TabsTrigger value="sales">По продажам</TabsTrigger>
           <TabsTrigger value="ranking">Рейтинг</TabsTrigger>
           <TabsTrigger value="detail">Детально</TabsTrigger>
