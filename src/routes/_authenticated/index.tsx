@@ -23,6 +23,7 @@ type RawEntry = {
   posted: number;
   returned: number;
   opening_balance: number;
+  actual_balance: number;
 };
 
 type Entry = {
@@ -44,7 +45,7 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance")
+        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
         .eq("year", year)
         .limit(50000);
       if (error) throw error;
@@ -52,7 +53,7 @@ function Dashboard() {
     },
   });
 
-  // Aggregate to per (store, ptype, month) computing realized client-side.
+  // Реал. = Нач + Пост − Возвр − Факт (по дню), агрегируем по (store, ptype, month).
   const entries: Entry[] = useMemo(() => {
     const grouped = new Map<string, RawEntry[]>();
     for (const e of rawEntries) {
@@ -69,8 +70,8 @@ function Dashboard() {
       let posted = 0, returned = 0, realized = 0;
       for (const d of list) {
         const base = d.day === 1 ? opening : prevActual;
-        const actual = base + (+d.posted) - (+d.returned);
-        realized += Math.max(0, base - actual);
+        const actual = +d.actual_balance;
+        realized += base + (+d.posted) - (+d.returned) - actual;
         posted += +d.posted;
         returned += +d.returned;
         prevActual = actual;
