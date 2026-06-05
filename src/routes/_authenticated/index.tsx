@@ -188,14 +188,36 @@ function Dashboard() {
             <Card className="p-4">
               <h3 className="font-medium mb-3">Реализация по типу</h3>
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={byType} dataKey="value" nameKey="name" outerRadius={90} label={(d: any) => d.name}>
-                      {byType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                {byTypeTotal === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Нет данных
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={byType}
+                        dataKey="value"
+                        nameKey="name"
+                        outerRadius={90}
+                        label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                      >
+                        {byType.map((t, i) => (
+                          <Cell key={i} fill={TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: any) => fmt(Number(v))} />
+                      <Legend
+                        wrapperStyle={{ fontSize: 12 }}
+                        formatter={(value: string) => {
+                          const item = byType.find((b) => b.name === value);
+                          const pct = item && byTypeTotal > 0 ? ((item.value / byTypeTotal) * 100).toFixed(1) : "0";
+                          return `${value} — ${pct}%`;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </Card>
           </div>
