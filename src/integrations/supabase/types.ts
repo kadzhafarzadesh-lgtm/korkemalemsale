@@ -16,7 +16,7 @@ export type Database = {
     Tables: {
       daily_entries: {
         Row: {
-          actual_balance: number
+          actual_balance: number | null
           created_at: string
           day: number
           id: string
@@ -31,7 +31,7 @@ export type Database = {
           year: number
         }
         Insert: {
-          actual_balance?: number
+          actual_balance?: number | null
           created_at?: string
           day: number
           id?: string
@@ -46,7 +46,7 @@ export type Database = {
           year: number
         }
         Update: {
-          actual_balance?: number
+          actual_balance?: number | null
           created_at?: string
           day?: number
           id?: string
