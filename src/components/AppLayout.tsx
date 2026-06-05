@@ -1,15 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { MONTHS } from "@/lib/months";
-import { Home, FileText, Settings, LogOut, Menu, ChevronDown, Calendar } from "lucide-react";
+import { Home, FileText, Settings, LogOut, ChevronDown, Calendar } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { InstallBanner } from "@/components/InstallBanner";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { profile, isAdmin, signOut } = useAuth();
-  const path = useRouterState({ select: s => s.location.pathname });
-  const [open, setOpen] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const [monthsOpen, setMonthsOpen] = useState(true);
 
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
@@ -17,10 +18,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return (
       <Link
         to={to}
-        onClick={() => setOpen(false)}
         className={cn(
           "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
-          active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          active
+            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         )}
       >
         <Icon className="w-4 h-4" /> {label}
@@ -39,10 +41,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <NavItem to="/" icon={Home} label="Главная" />
 
         <button
-          onClick={() => setMonthsOpen(v => !v)}
+          onClick={() => setMonthsOpen((v) => !v)}
           className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
         >
-          <span className="flex items-center gap-3"><Calendar className="w-4 h-4" /> Учёт</span>
+          <span className="flex items-center gap-3">
+            <Calendar className="w-4 h-4" /> Учёт
+          </span>
           <ChevronDown className={cn("w-4 h-4 transition-transform", monthsOpen && "rotate-180")} />
         </button>
         {monthsOpen && (
@@ -52,7 +56,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 key={i}
                 to="/month/$month"
                 params={{ month: String(i + 1) }}
-                onClick={() => setOpen(false)}
                 className={cn(
                   "block px-3 py-1.5 rounded-md text-sm",
                   path === `/month/${i + 1}`
@@ -78,7 +81,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             {profile?.role === "admin" ? "Администратор" : "Оператор"}
           </div>
         </div>
-        <Button variant="ghost" size="sm" className="w-full justify-start text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground" onClick={() => signOut()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          onClick={() => signOut()}
+        >
           <LogOut className="w-4 h-4 mr-2" /> Выйти
         </Button>
       </div>
@@ -89,19 +97,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex bg-background">
       <div className="hidden md:block">{sidebar}</div>
 
-      {open && (
-        <div className="md:hidden fixed inset-0 z-40 flex">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="relative">{sidebar}</div>
-        </div>
-      )}
-
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden h-12 border-b flex items-center px-3 bg-card">
-          <button onClick={() => setOpen(true)} className="p-2"><Menu className="w-5 h-5" /></button>
-          <span className="ml-2 font-medium">Полуфабрикаты</span>
+        <header className="md:hidden h-12 border-b flex items-center px-3 bg-card sticky top-0 z-30">
+          <span className="font-semibold">Полуфабрикаты</span>
+          <button
+            onClick={() => signOut()}
+            className="ml-auto p-2 text-muted-foreground active:scale-95"
+            aria-label="Выйти"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </header>
         <main className="flex-1 overflow-auto">{children}</main>
+        <MobileBottomNav />
+        <InstallBanner />
       </div>
     </div>
   );
