@@ -259,7 +259,7 @@ function Dashboard() {
                   {topStores.map((s, i) => (
                     <tr key={s.id} className="border-b last:border-0 hover:bg-muted/40">
                       <td className="py-2 px-2 font-medium">{i + 1}</td>
-                      <td className="py-2 px-2">{s.name}</td>
+                      <td className="py-2 px-2"><span className="md:hidden">{s.name.length > 20 ? s.name.slice(0, 19) + "…" : s.name}</span><span className="hidden md:inline">{s.name}</span></td>
                       <td className="py-2 px-2 text-right num">{fmt(s.realized)}</td>
                       <td className="py-2 px-2 text-right num">{s.retPct.toFixed(1)}%</td>
                       <td className="py-2 px-2 text-right num">{s.share.toFixed(1)}%</td>
