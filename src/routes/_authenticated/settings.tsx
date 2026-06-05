@@ -72,7 +72,15 @@ function UsersTab() {
       <div className="flex justify-between items-center">
         <h3 className="font-medium">Пользователи системы</h3>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-1" />Добавить</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <Button
+              size="sm"
+              className="md:static md:h-9 md:w-auto md:rounded-md md:shadow-none fixed bottom-24 right-4 z-30 h-14 w-14 rounded-full shadow-lg p-0 md:p-3"
+            >
+              <Plus className="w-6 h-6 md:w-4 md:h-4 md:mr-1" />
+              <span className="hidden md:inline">Добавить</span>
+            </Button>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Новый пользователь</DialogTitle></DialogHeader>
             <form onSubmit={submit} className="space-y-3">
@@ -142,7 +150,16 @@ function StoresTab() {
       <div className="flex justify-between items-center">
         <h3 className="font-medium">Магазины</h3>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm({ name: "", address: "", is_active: true }); } }}>
-          <DialogTrigger asChild><Button size="sm" onClick={() => { setEditing(null); setForm({ name: "", address: "", is_active: true }); }}><Plus className="w-4 h-4 mr-1" />Добавить</Button></DialogTrigger>
+          <DialogTrigger asChild>
+            <Button
+              size="sm"
+              onClick={() => { setEditing(null); setForm({ name: "", address: "", is_active: true }); }}
+              className="md:static md:h-9 md:w-auto md:rounded-md md:shadow-none fixed bottom-24 right-4 z-30 h-14 w-14 rounded-full shadow-lg p-0 md:p-3"
+            >
+              <Plus className="w-6 h-6 md:w-4 md:h-4 md:mr-1" />
+              <span className="hidden md:inline">Добавить</span>
+            </Button>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editing ? "Изменить магазин" : "Новый магазин"}</DialogTitle></DialogHeader>
             <form onSubmit={save} className="space-y-3">
