@@ -202,6 +202,7 @@ function Dashboard() {
                     <Bar dataKey="Реализация" fill={COLORS[1]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             </Card>
             <Card className="p-4">
