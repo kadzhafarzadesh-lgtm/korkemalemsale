@@ -207,7 +207,7 @@ function Dashboard() {
             </Card>
             <Card className="p-4">
               <h3 className="font-medium mb-3">Реализация по типу</h3>
-              <div className="h-72">
+              <div className="h-52 md:h-72">
                 {byTypeTotal === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                     Нет данных
