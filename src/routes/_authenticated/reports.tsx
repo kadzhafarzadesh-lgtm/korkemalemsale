@@ -44,21 +44,40 @@ function ReportsPage() {
   type Row = { store_id: string; product_type_id: string; posted: number; returned: number; realized: number; opening: number; closing: number };
 
   const aggregated: Row[] = useMemo(() => {
-    const m2 = new Map<string, Row>();
-    // group by store+ptype, opening = day1 opening, closing = max day actual
-    const lastByKey = new Map<string, { day: number; actual: number }>();
+    // Group entries by store+ptype, sort by day, compute realized client-side.
+    type Day = { day: number; posted: number; returned: number; opening_balance: number };
+    const grouped = new Map<string, Day[]>();
     for (const e of entries) {
       const k = `${e.store_id}|${e.product_type_id}`;
-      let r = m2.get(k);
-      if (!r) { r = { store_id: e.store_id, product_type_id: e.product_type_id, posted: 0, returned: 0, realized: 0, opening: 0, closing: 0 }; m2.set(k, r); }
-      r.posted += +e.posted; r.returned += +e.returned; r.realized += +e.realized;
-      if (e.day === 1) r.opening = +e.opening_balance;
-      const last = lastByKey.get(k);
-      if (!last || e.day > last.day) lastByKey.set(k, { day: e.day, actual: +e.actual_balance });
+      if (!grouped.has(k)) grouped.set(k, []);
+      grouped.get(k)!.push({
+        day: e.day,
+        posted: +e.posted,
+        returned: +e.returned,
+        opening_balance: +e.opening_balance,
+      });
     }
-    for (const [k, last] of lastByKey) { const r = m2.get(k); if (r) r.closing = last.actual; }
-    return Array.from(m2.values());
+    const result: Row[] = [];
+    for (const [k, list] of grouped) {
+      const [store_id, product_type_id] = k.split("|");
+      list.sort((a, b) => a.day - b.day);
+      const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
+      let prevActual = opening;
+      let posted = 0, returned = 0, realized = 0, closing = opening;
+      for (const d of list) {
+        const base = d.day === 1 ? opening : prevActual;
+        const actual = base + d.posted - d.returned;
+        realized += Math.max(0, base - actual);
+        posted += d.posted;
+        returned += d.returned;
+        prevActual = actual;
+        closing = actual;
+      }
+      result.push({ store_id, product_type_id, posted, returned, realized, opening, closing });
+    }
+    return result;
   }, [entries]);
+
 
   const filteredSales = useMemo(() => {
     return aggregated.filter(r =>

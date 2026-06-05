@@ -14,6 +14,17 @@ export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
 });
 
+type RawEntry = {
+  store_id: string;
+  product_type_id: string;
+  year: number;
+  month: number;
+  day: number;
+  posted: number;
+  returned: number;
+  opening_balance: number;
+};
+
 type Entry = {
   store_id: string;
   product_type_id: string;
@@ -28,22 +39,50 @@ function Dashboard() {
   const year = new Date().getFullYear();
   const [monthFilter, setMonthFilter] = useState<string>("all");
 
-  const { data: entries = [], isLoading } = useQuery({
+  const { data: rawEntries = [], isLoading } = useQuery({
     queryKey: ["dash-entries", year],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,posted,returned,realized")
+        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance")
         .eq("year", year)
         .limit(50000);
       if (error) throw error;
-      return (data ?? []) as Entry[];
+      return (data ?? []) as RawEntry[];
     },
   });
 
+  // Aggregate to per (store, ptype, month) computing realized client-side.
+  const entries: Entry[] = useMemo(() => {
+    const grouped = new Map<string, RawEntry[]>();
+    for (const e of rawEntries) {
+      const k = `${e.store_id}|${e.product_type_id}|${e.month}`;
+      if (!grouped.has(k)) grouped.set(k, []);
+      grouped.get(k)!.push(e);
+    }
+    const out: Entry[] = [];
+    for (const [k, list] of grouped) {
+      const [store_id, product_type_id, monthStr] = k.split("|");
+      list.sort((a, b) => a.day - b.day);
+      const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
+      let prevActual = opening;
+      let posted = 0, returned = 0, realized = 0;
+      for (const d of list) {
+        const base = d.day === 1 ? opening : prevActual;
+        const actual = base + (+d.posted) - (+d.returned);
+        realized += Math.max(0, base - actual);
+        posted += +d.posted;
+        returned += +d.returned;
+        prevActual = actual;
+      }
+      out.push({ store_id, product_type_id, year, month: Number(monthStr), posted, returned, realized });
+    }
+    return out;
+  }, [rawEntries, year]);
+
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
-    queryFn: async () => (await supabase.from("stores").select("id,name").order("sort_order")).data ?? [],
+    queryFn: async () => (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order")).data ?? [],
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
@@ -92,6 +131,7 @@ function Dashboard() {
       .sort((a, b) => b.realized - a.realized)
       .slice(0, 10);
   }, [filtered, stores]);
+
 
   const COLORS = ["hsl(200 60% 45%)", "hsl(150 50% 45%)", "hsl(250 50% 50%)", "hsl(25 70% 55%)", "hsl(280 50% 55%)"];
 
