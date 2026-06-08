@@ -364,7 +364,7 @@ function DesktopTable({
       <div
         ref={scrollerRef}
         onScroll={onBottomScroll}
-        className="border border-t-0 rounded-b-md bg-card overflow-x-auto -mt-2"
+        className="border border-t-0 rounded-b-md bg-card overflow-x-auto"
       >
         <table ref={tableRef} className="text-xs num min-w-max">
           <thead className="bg-muted/60 sticky top-0 z-10">
