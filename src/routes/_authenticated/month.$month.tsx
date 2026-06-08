@@ -242,8 +242,12 @@ function MonthPage() {
           getComp={getComp}
           saveCell={saveCell}
           dayTotals={dayTotals}
+          isCurrentMonth={today.getFullYear() === year && today.getMonth() + 1 === m}
+          isPastMonth={year < today.getFullYear() || (year === today.getFullYear() && m < today.getMonth() + 1)}
+          currentDay={today.getDate()}
         />
       )}
+
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-md">
         <Stat label="Поступило" value={fmt(totals.posted)} />
