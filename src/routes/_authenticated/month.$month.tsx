@@ -242,8 +242,12 @@ function MonthPage() {
           getComp={getComp}
           saveCell={saveCell}
           dayTotals={dayTotals}
+          isCurrentMonth={today.getFullYear() === year && today.getMonth() + 1 === m}
+          isPastMonth={year < today.getFullYear() || (year === today.getFullYear() && m < today.getMonth() + 1)}
+          currentDay={today.getDate()}
         />
       )}
+
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-md">
         <Stat label="Поступило" value={fmt(totals.posted)} />
@@ -263,93 +267,217 @@ type TableProps = {
   dayTotals: { posted: number; returned: number; realized: number }[];
 };
 
-function DesktopTable({ rows, days, getDay, getComp, saveCell, dayTotals }: TableProps) {
+function DesktopTable({
+  rows, days, getDay, getComp, saveCell, dayTotals,
+  isCurrentMonth, isPastMonth, currentDay,
+}: TableProps & { isCurrentMonth: boolean; isPastMonth: boolean; currentDay: number }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const syncing = useRef(false);
+  const [innerWidth, setInnerWidth] = useState(0);
+
+  // Track table width for the top scrollbar sizer.
+  useEffect(() => {
+    const update = () => { if (tableRef.current) setInnerWidth(tableRef.current.scrollWidth); };
+    update();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    if (ro && tableRef.current) ro.observe(tableRef.current);
+    window.addEventListener("resize", update);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", update); };
+  }, [days, rows.length]);
+
+  const STICKY_OFFSET = 320; // ширина 3 закреплённых колонок (~310px)
+
+  // Авто-прокрутка к нужному дню при открытии месяца.
+  useEffect(() => {
+    if (!scrollerRef.current || innerWidth === 0) return;
+    let targetDay: number | null = null;
+    if (isCurrentMonth) {
+      targetDay = currentDay;
+    } else if (isPastMonth) {
+      // Последний день с любым значением actual_balance / posted / returned.
+      let last = 1;
+      for (const r of rows) {
+        for (let d = 1; d <= days; d++) {
+          const e = getDay(r.store.id, r.ptype.id, d);
+          if (!e) continue;
+          if (e.actual_balance != null || +e.posted !== 0 || +e.returned !== 0) {
+            if (d > last) last = d;
+          }
+        }
+      }
+      targetDay = last;
+    }
+    if (!targetDay) return;
+    const el = scrollerRef.current.querySelector(`[data-day="${targetDay}"]`) as HTMLElement | null;
+    if (!el) return;
+    const left = Math.max(0, el.offsetLeft - STICKY_OFFSET);
+    scrollerRef.current.scrollLeft = left;
+    if (topRef.current) topRef.current.scrollLeft = left;
+    // run only after layout settles
+  }, [innerWidth]);
+
+  const scrollToToday = () => {
+    if (!scrollerRef.current) return;
+    const el = scrollerRef.current.querySelector(`[data-day="${currentDay}"]`) as HTMLElement | null;
+    if (!el) return;
+    scrollerRef.current.scrollTo({ left: Math.max(0, el.offsetLeft - STICKY_OFFSET), behavior: "smooth" });
+  };
+
+  const onTopScroll = () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    if (scrollerRef.current && topRef.current) scrollerRef.current.scrollLeft = topRef.current.scrollLeft;
+    requestAnimationFrame(() => { syncing.current = false; });
+  };
+  const onBottomScroll = () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    if (scrollerRef.current && topRef.current) topRef.current.scrollLeft = scrollerRef.current.scrollLeft;
+    requestAnimationFrame(() => { syncing.current = false; });
+  };
+
   return (
-    <div className="border rounded-lg bg-card overflow-x-auto">
-      <table className="text-xs num min-w-max">
-        <thead className="bg-muted/60 sticky top-0 z-10">
-          <tr>
-            <th className="sticky left-0 bg-muted/80 px-2 py-2 border-r w-10 text-left">№</th>
-            <th className="sticky left-10 bg-muted/80 px-2 py-2 border-r min-w-[260px] text-left">Магазин</th>
-            <th className="sticky left-[300px] bg-muted/80 px-2 py-2 border-r w-16 text-left">Прод.</th>
-            <th className="px-2 py-2 border-r text-right">Нач. ост.</th>
-            {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-              <th key={d} colSpan={4} className="px-2 py-2 border-r text-center bg-primary/5">
-                День {d}
-              </th>
-            ))}
-          </tr>
-          <tr className="text-muted-foreground">
-            <th className="sticky left-0 bg-muted/80 border-r" />
-            <th className="sticky left-10 bg-muted/80 border-r" />
-            <th className="sticky left-[300px] bg-muted/80 border-r" />
-            <th className="border-r" />
-            {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-              <Fragment key={d}>
-                <th className="px-1 py-1 font-normal">Пост.</th>
-                <th className="px-1 py-1 font-normal">Возвр.</th>
-                <th className="px-1 py-1 font-normal">Факт.</th>
-                <th className="px-1 py-1 font-normal border-r">Реал.</th>
-              </Fragment>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => {
-            const opening = +(getDay(row.store.id, row.ptype.id, 1)?.opening_balance ?? 0);
-            return (
-              <tr key={`${row.store.id}|${row.ptype.id}`} className="border-t hover:bg-muted/30">
-                <td className="sticky left-0 bg-card px-2 py-1 border-r text-muted-foreground">{idx + 1}</td>
-                <td className="sticky left-10 bg-card px-2 py-1 border-r whitespace-nowrap">{row.store.name}</td>
-                <td className="sticky left-[300px] bg-card px-2 py-1 border-r">{row.ptype.name}</td>
-                <td className="border-r p-0">
-                  <Cell value={opening} onSave={(v) => saveCell(row.store.id, row.ptype.id, 1, "opening_balance", v ?? 0)} />
-                </td>
-                {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
-                  const c = getComp(row.store.id, row.ptype.id, d);
-                  const isNeg = c?.realized != null && c.realized < 0;
-                  return (
-                    <Fragment key={d}>
-                      <td className="p-0">
-                        <Cell value={c?.posted ?? 0} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "posted", v ?? 0)} />
-                      </td>
-                      <td className="p-0">
-                        <Cell value={c?.returned ?? 0} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v ?? 0)} />
-                      </td>
-                      <td className="p-0">
-                        <Cell
-                          value={c?.manual ?? null}
-                          autoValue={c?.isAuto ? (c.effective as number) : null}
-                          nullable
-                          onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
-                        />
-                      </td>
-                      <td className={"px-2 py-1 text-right border-r font-medium bg-accent/5 " + (isNeg ? "text-destructive" : "text-foreground")}>
-                        {c?.realized != null ? fmt(c.realized) : "—"}
-                      </td>
-                    </Fragment>
-                  );
-                })}
-              </tr>
-            );
-          })}
-          <tr className="border-t bg-primary/10 font-semibold">
-            <td className="sticky left-0 bg-primary/10 px-2 py-2 border-r" colSpan={3}>ИТОГО</td>
-            <td className="border-r" />
-            {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-              <Fragment key={d}>
-                <td className="px-1 text-right">{fmt(dayTotals[d].posted)}</td>
-                <td className="px-1 text-right">{fmt(dayTotals[d].returned)}</td>
-                <td className="px-1 text-right">—</td>
-                <td className="px-1 text-right border-r">{fmt(dayTotals[d].realized)}</td>
-              </Fragment>
-            ))}
-          </tr>
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {isCurrentMonth && (
+        <div className="flex justify-end">
+          <button
+            onClick={scrollToToday}
+            className="text-xs px-3 py-1 rounded-full border border-sidebar text-sidebar bg-card hover:bg-sidebar/5 transition-colors"
+          >
+            📅 Сегодня
+          </button>
+        </div>
+      )}
+
+      {/* Верхний синхронизированный скроллбар (sticky) */}
+      <div
+        ref={topRef}
+        onScroll={onTopScroll}
+        className="overflow-x-auto sticky top-0 z-20 bg-muted/60 border rounded-t-md"
+        style={{ height: 14 }}
+      >
+        <div style={{ width: innerWidth, height: 1 }} />
+      </div>
+
+      <div
+        ref={scrollerRef}
+        onScroll={onBottomScroll}
+        className="border border-t-0 rounded-b-md bg-card overflow-x-auto"
+      >
+        <table ref={tableRef} className="text-xs num min-w-max">
+          <thead className="bg-muted/60 sticky top-0 z-10">
+            <tr>
+              <th className="sticky left-0 bg-muted/80 px-2 py-2 border-r w-10 text-left shadow-[2px_0_0_rgba(0,0,0,0.04)]">№</th>
+              <th className="sticky left-10 bg-muted/80 px-2 py-2 border-r min-w-[260px] text-left">Магазин</th>
+              <th className="sticky left-[300px] bg-muted/80 px-2 py-2 border-r w-16 text-left shadow-[2px_0_4px_rgba(0,0,0,0.08)]">Прод.</th>
+              <th className="px-2 py-2 border-r text-right">Нач. ост.</th>
+              {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
+                const isToday = isCurrentMonth && d === currentDay;
+                return (
+                  <th
+                    key={d}
+                    data-day={d}
+                    colSpan={4}
+                    className={cn(
+                      "px-2 py-2 border-r text-center",
+                      isToday ? "bg-sidebar text-sidebar-foreground" : "bg-primary/5"
+                    )}
+                  >
+                    День {d}
+                  </th>
+                );
+              })}
+            </tr>
+            <tr className="text-muted-foreground">
+              <th className="sticky left-0 bg-muted/80 border-r" />
+              <th className="sticky left-10 bg-muted/80 border-r" />
+              <th className="sticky left-[300px] bg-muted/80 border-r shadow-[2px_0_4px_rgba(0,0,0,0.08)]" />
+              <th className="border-r" />
+              {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
+                const isToday = isCurrentMonth && d === currentDay;
+                const bg = isToday ? "bg-[#f0f4ff]" : "";
+                return (
+                  <Fragment key={d}>
+                    <th className={cn("px-1 py-1 font-normal", bg)}>Пост.</th>
+                    <th className={cn("px-1 py-1 font-normal", bg)}>Возвр.</th>
+                    <th className={cn("px-1 py-1 font-normal", bg)}>Факт.</th>
+                    <th className={cn("px-1 py-1 font-normal border-r", bg)}>Реал.</th>
+                  </Fragment>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              const opening = +(getDay(row.store.id, row.ptype.id, 1)?.opening_balance ?? 0);
+              return (
+                <tr key={`${row.store.id}|${row.ptype.id}`} className="border-t hover:bg-muted/30">
+                  <td className="sticky left-0 bg-card px-2 py-1 border-r text-muted-foreground">{idx + 1}</td>
+                  <td className="sticky left-10 bg-card px-2 py-1 border-r whitespace-nowrap">{row.store.name}</td>
+                  <td className="sticky left-[300px] bg-card px-2 py-1 border-r shadow-[2px_0_4px_rgba(0,0,0,0.08)]">{row.ptype.name}</td>
+                  <td className="border-r p-0">
+                    <Cell value={opening} onSave={(v) => saveCell(row.store.id, row.ptype.id, 1, "opening_balance", v ?? 0)} />
+                  </td>
+                  {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
+                    const c = getComp(row.store.id, row.ptype.id, d);
+                    const isNeg = c?.realized != null && c.realized < 0;
+                    const isToday = isCurrentMonth && d === currentDay;
+                    const tdBg = isToday ? "bg-[#f0f4ff]" : "";
+                    return (
+                      <Fragment key={d}>
+                        <td className={cn("p-0", tdBg)}>
+                          <Cell value={c?.posted ?? 0} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "posted", v ?? 0)} />
+                        </td>
+                        <td className={cn("p-0", tdBg)}>
+                          <Cell value={c?.returned ?? 0} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v ?? 0)} />
+                        </td>
+                        <td className={cn("p-0", tdBg)}>
+                          <Cell
+                            value={c?.manual ?? null}
+                            autoValue={c?.isAuto ? (c.effective as number) : null}
+                            nullable
+                            onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "actual_balance", v)}
+                          />
+                        </td>
+                        <td className={cn(
+                          "px-2 py-1 text-right border-r font-medium",
+                          isToday ? "bg-[#f0f4ff]" : "bg-accent/5",
+                          isNeg ? "text-destructive" : "text-foreground"
+                        )}>
+                          {c?.realized != null ? fmt(c.realized) : "—"}
+                        </td>
+                      </Fragment>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            <tr className="border-t bg-primary/10 font-semibold">
+              <td className="sticky left-0 bg-primary/10 px-2 py-2 border-r" colSpan={3}>ИТОГО</td>
+              <td className="border-r" />
+              {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
+                const isToday = isCurrentMonth && d === currentDay;
+                const tdBg = isToday ? "bg-[#dbe5ff]" : "";
+                const isNeg = dayTotals[d].realized < 0;
+                return (
+                  <Fragment key={d}>
+                    <td className={cn("px-1 text-right", tdBg)}>{fmt(dayTotals[d].posted)}</td>
+                    <td className={cn("px-1 text-right", tdBg)}>{fmt(dayTotals[d].returned)}</td>
+                    <td className={cn("px-1 text-right", tdBg)}>—</td>
+                    <td className={cn("px-1 text-right border-r", tdBg, isNeg && "text-destructive")}>{fmt(dayTotals[d].realized)}</td>
+                  </Fragment>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
 
 function MobileTable({
   rows, days, selectedDay, setSelectedDay, getDay, getComp, saveCell, dayTotals,
