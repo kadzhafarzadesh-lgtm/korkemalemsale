@@ -265,9 +265,10 @@ function ReportsPage() {
                 <tr key={i} className="border-t hover:bg-muted/30">
                   <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{MONTHS[m - 1]}</td>
                   <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
-                  <td className="text-right num font-medium">{fmt(r.realized)}</td>
+                  <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                   <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
                 </tr>))}</tbody>
+
             </table>
           </Card>
         </TabsContent>
