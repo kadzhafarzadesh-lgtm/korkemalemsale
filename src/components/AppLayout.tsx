@@ -31,7 +31,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const sidebar = (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground h-screen flex flex-col border-r border-sidebar-border">
+    <aside className="w-64 bg-sidebar text-sidebar-foreground sticky top-0 h-screen flex flex-col border-r border-sidebar-border self-start">
+
       <div className="px-5 py-5 border-b border-sidebar-border">
         <div className="text-lg font-semibold leading-tight">Полуфабрикаты</div>
         <div className="text-xs text-sidebar-foreground/60 mt-0.5">Учёт продаж</div>
