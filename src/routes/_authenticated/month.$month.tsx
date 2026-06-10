@@ -287,7 +287,9 @@ function MonthPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="border rounded-lg p-8 text-center text-muted-foreground bg-card">
-          Нет активных магазинов или типов продукции. Добавьте их в Настройках.
+          {stores.length === 0 || ptypes.length === 0
+            ? "Нет активных магазинов или типов продукции. Добавьте их в Настройках."
+            : "По выбранным фильтрам ничего не найдено."}
         </div>
       ) : isMobile ? (
         <MobileTable
