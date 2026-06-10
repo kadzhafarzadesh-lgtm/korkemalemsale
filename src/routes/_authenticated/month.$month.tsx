@@ -26,7 +26,8 @@ type Entry = {
   opening_balance: number;
 };
 
-type Store = { id: string; name: string };
+type Store = { id: string; name: string; counterparty_id: string | null };
+type Counterparty = { id: string; name: string };
 type PType = { id: string; name: string };
 
 function truncate(s: string, n: number) {
