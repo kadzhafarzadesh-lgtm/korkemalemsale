@@ -244,6 +244,43 @@ function MonthPage() {
         </p>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground">Контрагент</label>
+          <select
+            value={filterCp}
+            onChange={(e) => { setFilterCp(e.target.value); setFilterStore("all"); }}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {counterparties.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Магазин</label>
+          <select
+            value={filterStore}
+            onChange={(e) => setFilterStore(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {visibleStores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Продукция</label>
+          <select
+            value={filterPtype}
+            onChange={(e) => setFilterPtype(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {ptypes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
