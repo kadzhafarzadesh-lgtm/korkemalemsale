@@ -6,7 +6,7 @@ export type Profile = {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "operator";
+  role: "admin" | "operator" | "viewer";
   is_active: boolean;
 };
 
@@ -16,6 +16,8 @@ type AuthCtx = {
   profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
+  isViewer: boolean;
+  canWrite: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
@@ -84,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading,
         isAdmin: profile?.role === "admin",
+        isViewer: profile?.role === "viewer",
+        canWrite: profile?.role === "admin" || profile?.role === "operator",
         signOut: async () => { await supabase.auth.signOut(); },
         refreshProfile: async () => {
           if (session?.user) {
