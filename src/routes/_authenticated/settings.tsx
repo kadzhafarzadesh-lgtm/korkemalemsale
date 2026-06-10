@@ -59,7 +59,7 @@ function UsersTab() {
     queryFn: async () => (await supabase.from("profiles").select("*").order("created_at", { ascending: false })).data ?? [],
   });
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "operator" as "admin" | "operator" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "operator" as "admin" | "operator" | "viewer" });
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -92,7 +92,7 @@ function UsersTab() {
               <div><Label>Роль</Label>
                 <Select value={form.role} onValueChange={(v: any) => setForm({ ...form, role: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="operator">Оператор</SelectItem><SelectItem value="admin">Администратор</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="operator">Оператор</SelectItem><SelectItem value="viewer">Руководитель</SelectItem><SelectItem value="admin">Администратор</SelectItem></SelectContent>
                 </Select></div>
               <DialogFooter><Button type="submit" disabled={busy}>{busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Создать</Button></DialogFooter>
             </form>
@@ -105,7 +105,7 @@ function UsersTab() {
           <tbody>{users.map(u => (
             <tr key={u.id} className="border-t">
               <td className="py-2">{u.name}</td><td>{u.email}</td>
-              <td>{u.role === "admin" ? "Администратор" : "Оператор"}</td>
+              <td>{u.role === "admin" ? "Администратор" : u.role === "viewer" ? "Руководитель" : "Оператор"}</td>
               <td><Switch checked={u.is_active} onCheckedChange={async (v) => { try { await setActive({ data: { userId: u.id, isActive: v } }); qc.invalidateQueries({ queryKey: ["users"] }); } catch (e: any) { toast.error(e.message); } }} /></td>
               <td className="text-right">
                 <Button variant="ghost" size="sm" onClick={async () => { if (!confirm("Удалить пользователя?")) return; try { await del({ data: { userId: u.id } }); toast.success("Удалено"); qc.invalidateQueries({ queryKey: ["users"] }); } catch (e: any) { toast.error(e.message); } }}>

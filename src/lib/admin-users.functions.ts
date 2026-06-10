@@ -6,7 +6,7 @@ const createSchema = z.object({
   email: z.string().email().max(255),
   password: z.string().min(8).max(128),
   name: z.string().min(1).max(100),
-  role: z.enum(["admin", "operator"]),
+  role: z.enum(["admin", "operator", "viewer"]),
 });
 
 export const createUser = createServerFn({ method: "POST" })

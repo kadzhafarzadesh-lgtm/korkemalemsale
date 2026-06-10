@@ -79,7 +79,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="font-medium text-sidebar-foreground truncate">{profile?.name ?? "—"}</div>
           <div className="truncate">{profile?.email}</div>
           <div className="mt-1 inline-block px-2 py-0.5 rounded bg-sidebar-accent text-[10px] uppercase">
-            {profile?.role === "admin" ? "Администратор" : "Оператор"}
+            {profile?.role === "admin" ? "Администратор" : profile?.role === "viewer" ? "Руководитель" : "Оператор"}
           </div>
         </div>
         <Button
