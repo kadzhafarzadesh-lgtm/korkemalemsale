@@ -121,10 +121,11 @@ function UsersTab() {
 
 function StoresTab() {
   const qc = useQueryClient();
-  const { data: stores = [] } = useQuery({ queryKey: ["all-stores"], queryFn: async () => (await supabase.from("stores").select("*").order("sort_order")).data ?? [] });
+  const { data: stores = [] } = useQuery({ queryKey: ["all-stores"], queryFn: async () => (await supabase.from("stores").select("*, counterparties(id,name)").order("sort_order")).data ?? [] });
+  const { data: counterparties = [] } = useQuery({ queryKey: ["all-counterparties"], queryFn: async () => (await supabase.from("counterparties").select("*").eq("is_active", true).order("sort_order")).data ?? [] });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", address: "", is_active: true });
+  const [form, setForm] = useState<{ name: string; address: string; is_active: boolean; counterparty_id: string | null }>({ name: "", address: "", is_active: true, counterparty_id: null });
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +137,7 @@ function StoresTab() {
       const { error } = await supabase.from("stores").insert({ ...form, sort_order: maxOrder + 1 });
       if (error) return toast.error(error.message);
     }
-    toast.success("Сохранено"); setOpen(false); setEditing(null); setForm({ name: "", address: "", is_active: true });
+    toast.success("Сохранено"); setOpen(false); setEditing(null); setForm({ name: "", address: "", is_active: true, counterparty_id: null });
     qc.invalidateQueries({ queryKey: ["all-stores"] }); qc.invalidateQueries({ queryKey: ["stores"] });
   };
 
@@ -151,11 +152,11 @@ function StoresTab() {
     <Card className="p-4 space-y-3">
       <div className="flex justify-between items-center">
         <h3 className="font-medium">Магазины</h3>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm({ name: "", address: "", is_active: true }); } }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); setForm({ name: "", address: "", is_active: true, counterparty_id: null }); } }}>
           <DialogTrigger asChild>
             <Button
               size="sm"
-              onClick={() => { setEditing(null); setForm({ name: "", address: "", is_active: true }); }}
+              onClick={() => { setEditing(null); setForm({ name: "", address: "", is_active: true, counterparty_id: null }); }}
               className="md:static md:h-9 md:w-auto md:rounded-md md:shadow-none fixed bottom-24 right-4 z-30 h-14 w-14 rounded-full shadow-lg p-0 md:p-3"
             >
               <Plus className="w-6 h-6 md:w-4 md:h-4 md:mr-1" />
@@ -167,6 +168,16 @@ function StoresTab() {
             <form onSubmit={save} className="space-y-3">
               <div><Label>Название</Label><Input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
               <div><Label>Адрес</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+              <div>
+                <Label>Контрагент</Label>
+                <Select value={form.counterparty_id ?? "none"} onValueChange={(v) => setForm({ ...form, counterparty_id: v === "none" ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="Без контрагента" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Без контрагента</SelectItem>
+                    {counterparties.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-2"><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} /><Label>Активен</Label></div>
               <DialogFooter><Button type="submit">Сохранить</Button></DialogFooter>
             </form>
@@ -174,15 +185,58 @@ function StoresTab() {
         </Dialog>
       </div>
       <table className="w-full text-sm">
-        <thead className="text-muted-foreground text-left"><tr><th className="py-2 w-10">#</th><th>Название</th><th>Адрес</th><th>Статус</th><th></th></tr></thead>
-        <tbody>{stores.map((s, i) => (
+        <thead className="text-muted-foreground text-left"><tr><th className="py-2 w-10">#</th><th>Название</th><th>Контрагент</th><th>Адрес</th><th>Статус</th><th></th></tr></thead>
+        <tbody>{stores.map((s: any, i) => (
           <tr key={s.id} className="border-t">
-            <td className="py-2 text-muted-foreground">{i + 1}</td><td>{s.name}</td><td className="text-muted-foreground">{s.address || "—"}</td>
+            <td className="py-2 text-muted-foreground">{i + 1}</td><td>{s.name}</td>
+            <td className="text-muted-foreground">{s.counterparties?.name ?? "—"}</td>
+            <td className="text-muted-foreground">{s.address || "—"}</td>
             <td>{s.is_active ? "Активен" : "Неактивен"}</td>
             <td className="text-right">
-              <Button variant="ghost" size="sm" onClick={() => { setEditing(s); setForm({ name: s.name, address: s.address ?? "", is_active: s.is_active }); setOpen(true); }}>Изменить</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setEditing(s); setForm({ name: s.name, address: s.address ?? "", is_active: s.is_active, counterparty_id: s.counterparty_id ?? null }); setOpen(true); }}>Изменить</Button>
               <Button variant="ghost" size="sm" onClick={() => remove(s.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
             </td>
+          </tr>))}</tbody>
+      </table>
+    </Card>
+  );
+}
+
+function CounterpartiesTab() {
+  const qc = useQueryClient();
+  const { data: items = [] } = useQuery({ queryKey: ["all-counterparties"], queryFn: async () => (await supabase.from("counterparties").select("*").order("sort_order")).data ?? [] });
+  const [name, setName] = useState("");
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!name.trim()) return;
+    const maxOrder = Math.max(0, ...items.map((p: any) => p.sort_order));
+    const { error } = await supabase.from("counterparties").insert({ name: name.trim(), sort_order: maxOrder + 1 });
+    if (error) return toast.error(error.message);
+    setName(""); toast.success("Добавлено"); qc.invalidateQueries({ queryKey: ["all-counterparties"] });
+  };
+  const toggle = async (id: string, v: boolean) => {
+    const { error } = await supabase.from("counterparties").update({ is_active: v }).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["all-counterparties"] });
+  };
+  const remove = async (id: string) => {
+    if (!confirm("Удалить контрагента? У магазинов поле будет очищено.")) return;
+    const { error } = await supabase.from("counterparties").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Удалено"); qc.invalidateQueries({ queryKey: ["all-counterparties"] });
+    qc.invalidateQueries({ queryKey: ["all-stores"] });
+  };
+
+  return (
+    <Card className="p-4 space-y-3">
+      <h3 className="font-medium">Контрагенты</h3>
+      <form onSubmit={add} className="flex gap-2"><Input placeholder="Например: ИП Иванов" value={name} onChange={e => setName(e.target.value)} /><Button type="submit"><Plus className="w-4 h-4 mr-1" />Добавить</Button></form>
+      <table className="w-full text-sm">
+        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th>Активен</th><th></th></tr></thead>
+        <tbody>{items.map((p: any) => (
+          <tr key={p.id} className="border-t"><td className="py-2">{p.name}</td>
+            <td><Switch checked={p.is_active} onCheckedChange={(v) => toggle(p.id, v)} /></td>
+            <td className="text-right"><Button variant="ghost" size="sm" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
           </tr>))}</tbody>
       </table>
     </Card>
