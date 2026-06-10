@@ -121,9 +121,12 @@ function MonthPage() {
 
   const rows = useMemo(() => {
     const r: { store: Store; ptype: PType }[] = [];
-    for (const s of stores) for (const p of ptypes) r.push({ store: s, ptype: p });
+    for (const s of visibleStores) {
+      if (filterStore !== "all" && s.id !== filterStore) continue;
+      for (const p of visiblePtypes) r.push({ store: s, ptype: p });
+    }
     return r;
-  }, [stores, ptypes]);
+  }, [visibleStores, visiblePtypes, filterStore]);
 
   const getDay = (storeId: string, ptypeId: string, d: number) =>
     byKey.get(`${storeId}|${ptypeId}|${d}`);
