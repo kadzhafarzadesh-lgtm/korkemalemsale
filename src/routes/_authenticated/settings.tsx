@@ -36,10 +36,12 @@ function SettingsPage() {
       <Tabs defaultValue="users">
         <TabsList className="w-full overflow-x-auto flex justify-start">
           <TabsTrigger value="users">Пользователи</TabsTrigger>
+          <TabsTrigger value="counterparties">Контрагенты</TabsTrigger>
           <TabsTrigger value="stores">Магазины</TabsTrigger>
           <TabsTrigger value="ptypes">Типы продукции</TabsTrigger>
         </TabsList>
         <TabsContent value="users"><UsersTab /></TabsContent>
+        <TabsContent value="counterparties"><CounterpartiesTab /></TabsContent>
         <TabsContent value="stores"><StoresTab /></TabsContent>
         <TabsContent value="ptypes"><PTypesTab /></TabsContent>
       </Tabs>
