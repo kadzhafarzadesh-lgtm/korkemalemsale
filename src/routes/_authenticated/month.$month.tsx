@@ -46,11 +46,23 @@ function MonthPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,sort_order")
+        .select("id,name,sort_order,counterparty_id")
         .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
       return (data ?? []) as Store[];
+    },
+  });
+
+  const { data: counterparties = [] } = useQuery<Counterparty[]>({
+    queryKey: ["counterparties"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("counterparties")
+        .select("id,name,sort_order")
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as Counterparty[];
     },
   });
 
@@ -65,6 +77,19 @@ function MonthPage() {
       return (data ?? []) as PType[];
     },
   });
+
+  const [filterCp, setFilterCp] = useState<string>("all");
+  const [filterStore, setFilterStore] = useState<string>("all");
+  const [filterPtype, setFilterPtype] = useState<string>("all");
+
+  const visibleStores = useMemo(
+    () => stores.filter(s => filterCp === "all" || s.counterparty_id === filterCp),
+    [stores, filterCp],
+  );
+  const visiblePtypes = useMemo(
+    () => ptypes.filter(p => filterPtype === "all" || p.id === filterPtype),
+    [ptypes, filterPtype],
+  );
 
   const { data: entries = [], isLoading } = useQuery<Entry[]>({
     queryKey: ["entries", year, m],
