@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      counterparties: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       daily_entries: {
         Row: {
           actual_balance: number | null
@@ -131,6 +158,7 @@ export type Database = {
       stores: {
         Row: {
           address: string | null
+          counterparty_id: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -140,6 +168,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          counterparty_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -149,6 +178,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          counterparty_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -156,7 +186,15 @@ export type Database = {
           sort_order?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "stores_counterparty_id_fkey"
+            columns: ["counterparty_id"]
+            isOneToOne: false
+            referencedRelation: "counterparties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

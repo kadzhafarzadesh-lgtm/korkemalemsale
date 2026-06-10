@@ -26,7 +26,8 @@ type Entry = {
   opening_balance: number;
 };
 
-type Store = { id: string; name: string };
+type Store = { id: string; name: string; counterparty_id: string | null };
+type Counterparty = { id: string; name: string };
 type PType = { id: string; name: string };
 
 function truncate(s: string, n: number) {
@@ -45,11 +46,23 @@ function MonthPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id,name,sort_order")
+        .select("id,name,sort_order,counterparty_id")
         .eq("is_active", true)
         .order("sort_order");
       if (error) throw error;
       return (data ?? []) as Store[];
+    },
+  });
+
+  const { data: counterparties = [] } = useQuery<Counterparty[]>({
+    queryKey: ["counterparties"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("counterparties")
+        .select("id,name,sort_order")
+        .order("sort_order");
+      if (error) throw error;
+      return (data ?? []) as Counterparty[];
     },
   });
 
@@ -64,6 +77,19 @@ function MonthPage() {
       return (data ?? []) as PType[];
     },
   });
+
+  const [filterCp, setFilterCp] = useState<string>("all");
+  const [filterStore, setFilterStore] = useState<string>("all");
+  const [filterPtype, setFilterPtype] = useState<string>("all");
+
+  const visibleStores = useMemo(
+    () => stores.filter(s => filterCp === "all" || s.counterparty_id === filterCp),
+    [stores, filterCp],
+  );
+  const visiblePtypes = useMemo(
+    () => ptypes.filter(p => filterPtype === "all" || p.id === filterPtype),
+    [ptypes, filterPtype],
+  );
 
   const { data: entries = [], isLoading } = useQuery<Entry[]>({
     queryKey: ["entries", year, m],
@@ -95,9 +121,12 @@ function MonthPage() {
 
   const rows = useMemo(() => {
     const r: { store: Store; ptype: PType }[] = [];
-    for (const s of stores) for (const p of ptypes) r.push({ store: s, ptype: p });
+    for (const s of visibleStores) {
+      if (filterStore !== "all" && s.id !== filterStore) continue;
+      for (const p of visiblePtypes) r.push({ store: s, ptype: p });
+    }
     return r;
-  }, [stores, ptypes]);
+  }, [visibleStores, visiblePtypes, filterStore]);
 
   const getDay = (storeId: string, ptypeId: string, d: number) =>
     byKey.get(`${storeId}|${ptypeId}|${d}`);
@@ -215,13 +244,52 @@ function MonthPage() {
         </p>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground">Контрагент</label>
+          <select
+            value={filterCp}
+            onChange={(e) => { setFilterCp(e.target.value); setFilterStore("all"); }}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {counterparties.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Магазин</label>
+          <select
+            value={filterStore}
+            onChange={(e) => setFilterStore(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {visibleStores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Продукция</label>
+          <select
+            value={filterPtype}
+            onChange={(e) => setFilterPtype(e.target.value)}
+            className="w-full h-10 px-3 rounded-md border bg-card text-sm"
+          >
+            <option value="all">Все</option>
+            {ptypes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : rows.length === 0 ? (
         <div className="border rounded-lg p-8 text-center text-muted-foreground bg-card">
-          Нет активных магазинов или типов продукции. Добавьте их в Настройках.
+          {stores.length === 0 || ptypes.length === 0
+            ? "Нет активных магазинов или типов продукции. Добавьте их в Настройках."
+            : "По выбранным фильтрам ничего не найдено."}
         </div>
       ) : isMobile ? (
         <MobileTable
