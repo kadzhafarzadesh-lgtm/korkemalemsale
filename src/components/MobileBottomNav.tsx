@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Home, FileText, Settings, Calendar } from "lucide-react";
+import { Home, FileText, Settings, Calendar, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MONTHS } from "@/lib/months";
@@ -16,6 +16,7 @@ export function MobileBottomNav() {
   const isHome = path === "/";
   const isReports = path === "/reports";
   const isSettings = path === "/settings";
+  const isExpiry = path === "/expiry";
 
   const Item = ({
     active, label, icon: Icon, onClick, to,
@@ -92,6 +93,7 @@ export function MobileBottomNav() {
             </div>
           </SheetContent>
         </Sheet>
+        <Item to="/expiry" label="Сроки" icon={AlertTriangle} active={isExpiry} />
         <Item to="/reports" label="Отчёты" icon={FileText} active={isReports} />
         {isAdmin && <Item to="/settings" label="Настройки" icon={Settings} active={isSettings} />}
       </nav>
