@@ -70,6 +70,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         )}
 
+        <NavItem to="/expiry" icon={AlertTriangle} label="Сроки годности" />
         <NavItem to="/reports" icon={FileText} label="Отчёты" />
         {isAdmin && <NavItem to="/settings" icon={Settings} label="Настройки" />}
       </nav>
