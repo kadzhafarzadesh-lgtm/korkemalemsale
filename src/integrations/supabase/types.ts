@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_insights: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          insight_date: string
+          metrics: Json | null
+          model: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          insight_date: string
+          metrics?: Json | null
+          model?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          insight_date?: string
+          metrics?: Json | null
+          model?: string | null
+        }
+        Relationships: []
+      }
       counterparties: {
         Row: {
           created_at: string
