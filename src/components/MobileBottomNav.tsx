@@ -1,5 +1,5 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Home, FileText, Settings, Calendar } from "lucide-react";
+import { Home, FileText, Settings, Calendar, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MONTHS } from "@/lib/months";
