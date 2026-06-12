@@ -172,6 +172,9 @@ function Dashboard() {
             <KpiCard label="% возвратов" value={kpis.retPct.toFixed(1) + "%"} icon={Percent} color="text-chart-4" />
           </div>
 
+          <AiInsightsCard />
+
+
           <div className="grid lg:grid-cols-3 gap-4">
             <Card className="p-4 lg:col-span-2">
               <h3 className="font-medium mb-3">Динамика по месяцам</h3>
