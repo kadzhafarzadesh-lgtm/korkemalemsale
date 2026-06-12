@@ -93,6 +93,7 @@ export function MobileBottomNav() {
             </div>
           </SheetContent>
         </Sheet>
+        <Item to="/expiry" label="Сроки" icon={AlertTriangle} active={isExpiry} />
         <Item to="/reports" label="Отчёты" icon={FileText} active={isReports} />
         {isAdmin && <Item to="/settings" label="Настройки" icon={Settings} active={isSettings} />}
       </nav>
