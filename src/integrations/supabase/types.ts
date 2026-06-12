@@ -136,18 +136,21 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          shelf_life_days: number
           sort_order: number
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          shelf_life_days?: number
           sort_order?: number
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          shelf_life_days?: number
           sort_order?: number
         }
         Relationships: []
