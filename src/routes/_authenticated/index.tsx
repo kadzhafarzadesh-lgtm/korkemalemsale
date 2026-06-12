@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MONTHS, MONTHS_SHORT, fmt } from "@/lib/months";
-import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2 } from "lucide-react";
+import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { getDailyInsights } from "@/lib/ai-insights.functions";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
