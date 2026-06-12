@@ -247,13 +247,21 @@ function PTypesTab() {
   const qc = useQueryClient();
   const { data: ptypes = [] } = useQuery({ queryKey: ["all-ptypes"], queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order")).data ?? [] });
   const [name, setName] = useState("");
+  const [shelf, setShelf] = useState("");
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault(); if (!name.trim()) return;
-    const maxOrder = Math.max(0, ...ptypes.map(p => p.sort_order));
-    const { error } = await supabase.from("product_types").insert({ name: name.trim(), sort_order: maxOrder + 1 });
+    const maxOrder = Math.max(0, ...ptypes.map((p: any) => p.sort_order));
+    const { error } = await supabase.from("product_types").insert({ name: name.trim(), sort_order: maxOrder + 1, shelf_life_days: Math.max(0, Math.min(3650, parseInt(shelf) || 0)) });
     if (error) return toast.error(error.message);
-    setName(""); toast.success("Добавлено"); qc.invalidateQueries({ queryKey: ["all-ptypes"] }); qc.invalidateQueries({ queryKey: ["ptypes"] });
+    setName(""); setShelf(""); toast.success("Добавлено"); qc.invalidateQueries({ queryKey: ["all-ptypes"] }); qc.invalidateQueries({ queryKey: ["ptypes"] });
+  };
+  const updateShelf = async (id: string, days: number) => {
+    const v = Math.max(0, Math.min(3650, Math.floor(days) || 0));
+    const { error } = await supabase.from("product_types").update({ shelf_life_days: v }).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["all-ptypes"] });
+    qc.invalidateQueries({ queryKey: ["expiry-report"] });
   };
   const remove = async (id: string) => {
     if (!confirm("Удалить тип? Связанные данные тоже удалятся.")) return;
@@ -265,11 +273,30 @@ function PTypesTab() {
   return (
     <Card className="p-4 space-y-3">
       <h3 className="font-medium">Типы продукции</h3>
-      <form onSubmit={add} className="flex gap-2"><Input placeholder="Например: сер." value={name} onChange={e => setName(e.target.value)} /><Button type="submit"><Plus className="w-4 h-4 mr-1" />Добавить</Button></form>
+      <p className="text-xs text-muted-foreground">Срок годности (в днях) используется для мониторинга партий. 0 — не отслеживать.</p>
+      <form onSubmit={add} className="flex gap-2 flex-wrap">
+        <Input placeholder="Например: сер." value={name} onChange={e => setName(e.target.value)} className="flex-1 min-w-40" />
+        <Input type="number" min={0} max={3650} placeholder="Срок, дней" value={shelf} onChange={e => setShelf(e.target.value)} className="w-32" />
+        <Button type="submit"><Plus className="w-4 h-4 mr-1" />Добавить</Button>
+      </form>
       <table className="w-full text-sm">
-        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th></th></tr></thead>
-        <tbody>{ptypes.map(p => (
-          <tr key={p.id} className="border-t"><td className="py-2">{p.name}</td>
+        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th className="w-40">Срок (дней)</th><th></th></tr></thead>
+        <tbody>{ptypes.map((p: any) => (
+          <tr key={p.id} className="border-t">
+            <td className="py-2">{p.name}</td>
+            <td>
+              <Input
+                type="number"
+                min={0}
+                max={3650}
+                defaultValue={p.shelf_life_days ?? 0}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value) || 0;
+                  if (v !== (p.shelf_life_days ?? 0)) updateShelf(p.id, v);
+                }}
+                className="h-8 w-24"
+              />
+            </td>
             <td className="text-right"><Button variant="ghost" size="sm" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
           </tr>))}</tbody>
       </table>
