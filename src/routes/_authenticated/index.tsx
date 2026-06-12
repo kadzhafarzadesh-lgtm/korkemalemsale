@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MONTHS, MONTHS_SHORT, fmt } from "@/lib/months";
-import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2 } from "lucide-react";
+import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { getDailyInsights } from "@/lib/ai-insights.functions";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
@@ -169,6 +172,9 @@ function Dashboard() {
             <KpiCard label="% возвратов" value={kpis.retPct.toFixed(1) + "%"} icon={Percent} color="text-chart-4" />
           </div>
 
+          <AiInsightsCard />
+
+
           <div className="grid lg:grid-cols-3 gap-4">
             <Card className="p-4 lg:col-span-2">
               <h3 className="font-medium mb-3">Динамика по месяцам</h3>
@@ -288,6 +294,50 @@ function KpiCard({ label, value, icon: Icon, color }: { label: string; value: st
         </div>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
+    </Card>
+  );
+}
+
+function AiInsightsCard() {
+  const fetchInsights = useServerFn(getDailyInsights);
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["ai-insights", new Date().toISOString().slice(0, 10)],
+    queryFn: () => fetchInsights(),
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  });
+
+  return (
+    <Card className="p-4 md:p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h3 className="font-semibold">ИИ-инсайты</h3>
+          {data?.created_at && (
+            <span className="text-xs text-muted-foreground">
+              · обновлено {new Date(data.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+        >
+          {isFetching ? "..." : "Обновить"}
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+          <Loader2 className="w-4 h-4 animate-spin" /> ИИ анализирует данные…
+        </div>
+      ) : error ? (
+        <p className="text-sm text-destructive">{(error as Error).message}</p>
+      ) : (
+        <div className="prose prose-sm dark:prose-invert max-w-none [&_ul]:my-2 [&_h2]:text-base [&_h3]:text-sm [&_h2]:mt-3 [&_h3]:mt-2">
+          <ReactMarkdown>{data?.content ?? ""}</ReactMarkdown>
+        </div>
+      )}
     </Card>
   );
 }
