@@ -16,6 +16,7 @@ export function MobileBottomNav() {
   const isHome = path === "/";
   const isReports = path === "/reports";
   const isSettings = path === "/settings";
+  const isExpiry = path === "/expiry";
 
   const Item = ({
     active, label, icon: Icon, onClick, to,
