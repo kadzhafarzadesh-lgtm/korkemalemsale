@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { MONTHS } from "@/lib/months";
-import { Home, FileText, Settings, LogOut, ChevronDown, Calendar } from "lucide-react";
+import { Home, FileText, Settings, LogOut, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
