@@ -297,3 +297,47 @@ function KpiCard({ label, value, icon: Icon, color }: { label: string; value: st
     </Card>
   );
 }
+
+function AiInsightsCard() {
+  const fetchInsights = useServerFn(getDailyInsights);
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["ai-insights", new Date().toISOString().slice(0, 10)],
+    queryFn: () => fetchInsights(),
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  });
+
+  return (
+    <Card className="p-4 md:p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h3 className="font-semibold">ИИ-инсайты</h3>
+          {data?.created_at && (
+            <span className="text-xs text-muted-foreground">
+              · обновлено {new Date(data.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+        >
+          {isFetching ? "..." : "Обновить"}
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+          <Loader2 className="w-4 h-4 animate-spin" /> ИИ анализирует данные…
+        </div>
+      ) : error ? (
+        <p className="text-sm text-destructive">{(error as Error).message}</p>
+      ) : (
+        <div className="prose prose-sm dark:prose-invert max-w-none [&_ul]:my-2 [&_h2]:text-base [&_h3]:text-sm [&_h2]:mt-3 [&_h3]:mt-2">
+          <ReactMarkdown>{data?.content ?? ""}</ReactMarkdown>
+        </div>
+      )}
+    </Card>
+  );
+}
