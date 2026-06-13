@@ -71,16 +71,17 @@ function Dashboard() {
   const today = new Date();
   const year = today.getFullYear();
   const [periodMode, setPeriodMode] = useState<"all" | "month" | "day">("all");
-  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [monthFilter, setMonthFilter] = useState<string>(String(today.getMonth() + 1));
   const [dayFilter, setDayFilter] = useState<Date>(today);
+  const dataYear = periodMode === "day" ? dayFilter.getFullYear() : year;
 
   const { data: rawEntries = [], isLoading } = useQuery({
-    queryKey: ["dash-entries", year],
+    queryKey: ["dash-entries", dataYear],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
         .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
-        .eq("year", year)
+        .eq("year", dataYear)
         .limit(50000);
       if (error) throw error;
       return (data ?? []) as RawEntry[];
@@ -101,16 +102,6 @@ function Dashboard() {
       list.sort((a, b) => a.day - b.day);
       const opening = +(list.find((d) => d.day === 1)?.opening_balance ?? 0);
       let prevEffective: number = opening;
-      let posted = 0, returned = 0, realized = 0;
-      for (const d of list) {
-        const base = d.day === 1 ? opening : prevEffective;
-        const manual = d.actual_balance == null ? null : +d.actual_balance;
-        const effective = manual != null ? manual : base;
-        realized += base + (+d.posted) - (+d.returned) - effective;
-        posted += +d.posted;
-        returned += +d.returned;
-        prevEffective = effective;
-      }
       for (const d of list) {
         const base = d.day === 1 ? opening : prevEffective;
         const manual = d.actual_balance == null ? null : +d.actual_balance;
@@ -119,7 +110,7 @@ function Dashboard() {
         out.push({
           store_id,
           product_type_id,
-          year,
+          year: d.year,
           month: Number(monthStr),
           day: d.day,
           posted: +d.posted,
@@ -130,7 +121,7 @@ function Dashboard() {
       }
     }
     return out;
-  }, [rawEntries, year]);
+  }, [rawEntries]);
 
 
   const { data: stores = [] } = useQuery({
