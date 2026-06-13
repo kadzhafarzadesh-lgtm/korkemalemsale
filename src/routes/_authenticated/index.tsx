@@ -5,9 +5,14 @@ import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MONTHS, MONTHS_SHORT, fmt } from "@/lib/months";
-import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2, Sparkles } from "lucide-react";
+import { TrendingUp, RotateCcw, ShoppingBag, Percent, Loader2, Sparkles, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend,
 } from "recharts";
@@ -34,22 +39,49 @@ type Entry = {
   product_type_id: string;
   year: number;
   month: number;
+  day: number;
   posted: number;
   returned: number;
   realized: number;
 };
 
+function DashboardDatePicker({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-start font-normal">
+          <CalendarIcon className="text-muted-foreground" />
+          {format(value, "dd MMMM yyyy", { locale: ru })}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={(date) => date && onChange(date)}
+          locale={ru}
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Dashboard() {
-  const year = new Date().getFullYear();
-  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const today = new Date();
+  const year = today.getFullYear();
+  const [periodMode, setPeriodMode] = useState<"all" | "month" | "day">("all");
+  const [monthFilter, setMonthFilter] = useState<string>(String(today.getMonth() + 1));
+  const [dayFilter, setDayFilter] = useState<Date>(today);
+  const dataYear = periodMode === "day" ? dayFilter.getFullYear() : year;
 
   const { data: rawEntries = [], isLoading } = useQuery({
-    queryKey: ["dash-entries", year],
+    queryKey: ["dash-entries", dataYear],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
         .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
-        .eq("year", year)
+        .eq("year", dataYear)
         .limit(50000);
       if (error) throw error;
       return (data ?? []) as RawEntry[];
@@ -70,20 +102,26 @@ function Dashboard() {
       list.sort((a, b) => a.day - b.day);
       const opening = +(list.find((d) => d.day === 1)?.opening_balance ?? 0);
       let prevEffective: number = opening;
-      let posted = 0, returned = 0, realized = 0;
       for (const d of list) {
         const base = d.day === 1 ? opening : prevEffective;
         const manual = d.actual_balance == null ? null : +d.actual_balance;
-        const effective = manual != null ? manual : base;
-        realized += base + (+d.posted) - (+d.returned) - effective;
-        posted += +d.posted;
-        returned += +d.returned;
+        const effective = manual != null ? manual : base + (+d.posted) - (+d.returned);
+        const dayRealized = manual != null ? base + (+d.posted) - (+d.returned) - manual : 0;
+        out.push({
+          store_id,
+          product_type_id,
+          year: d.year,
+          month: Number(monthStr),
+          day: d.day,
+          posted: +d.posted,
+          returned: +d.returned,
+          realized: dayRealized,
+        });
         prevEffective = effective;
       }
-      out.push({ store_id, product_type_id, year, month: Number(monthStr), posted, returned, realized });
     }
     return out;
-  }, [rawEntries, year]);
+  }, [rawEntries]);
 
 
   const { data: stores = [] } = useQuery({
@@ -96,10 +134,22 @@ function Dashboard() {
   });
 
   const filtered = useMemo(() => {
-    if (monthFilter === "all") return entries;
-    const m = Number(monthFilter);
-    return entries.filter(e => e.month === m);
-  }, [entries, monthFilter]);
+    if (periodMode === "day") {
+      return entries.filter(e =>
+        e.year === dayFilter.getFullYear() &&
+        e.month === dayFilter.getMonth() + 1 &&
+        e.day === dayFilter.getDate()
+      );
+    }
+    if (periodMode === "month") return entries.filter(e => e.month === Number(monthFilter));
+    return entries;
+  }, [entries, periodMode, monthFilter, dayFilter]);
+
+  const periodLabel = periodMode === "day"
+    ? format(dayFilter, "dd MMMM yyyy", { locale: ru })
+    : periodMode === "month"
+      ? `${MONTHS[Number(monthFilter) - 1]} ${year}`
+      : `${year} год`;
 
   const kpis = useMemo(() => {
     let posted = 0, returned = 0, realized = 0;
@@ -109,13 +159,13 @@ function Dashboard() {
 
   const monthly = useMemo(() => {
     const arr = MONTHS.map((_, i) => ({ name: MONTHS_SHORT[i], Поступления: 0, Возвраты: 0, Реализация: 0 }));
-    for (const e of entries) {
+    for (const e of filtered) {
       arr[e.month - 1].Поступления += +e.posted;
       arr[e.month - 1].Возвраты += +e.returned;
       arr[e.month - 1].Реализация += +e.realized;
     }
     return arr;
-  }, [entries]);
+  }, [filtered]);
 
   const byType = useMemo(() => {
     const m = new Map<string, number>();
@@ -148,16 +198,34 @@ function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Главная</h1>
-          <p className="text-sm text-muted-foreground">Аналитика продаж за {year} год</p>
+          <p className="text-sm text-muted-foreground">Аналитика продаж: {periodLabel}</p>
         </div>
-        <div className="w-full md:w-48">
-          <Select value={monthFilter} onValueChange={setMonthFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Все месяцы</SelectItem>
-              {MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+          <div className="w-full sm:w-40">
+            <Select value={periodMode} onValueChange={(value) => setPeriodMode(value as typeof periodMode)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Весь год</SelectItem>
+                <SelectItem value="month">По месяцу</SelectItem>
+                <SelectItem value="day">По дню</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {periodMode === "month" && (
+            <div className="w-full sm:w-44">
+              <Select value={monthFilter} onValueChange={setMonthFilter}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {periodMode === "day" && (
+            <div className="w-full sm:w-56">
+              <DashboardDatePicker value={dayFilter} onChange={setDayFilter} />
+            </div>
+          )}
         </div>
       </div>
 
