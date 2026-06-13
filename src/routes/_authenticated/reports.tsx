@@ -18,6 +18,28 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
+function DatePicker({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-11 w-full justify-start font-normal">
+          <CalendarIcon className="text-muted-foreground" />
+          {format(value, "dd MMMM yyyy", { locale: ru })}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={(date) => date && onChange(date)}
+          locale={ru}
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ReportsPage() {
   const today = new Date();
   const year = today.getFullYear();
@@ -180,24 +202,24 @@ function ReportsPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Продажи");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(typeSummary.map(t => ({ Тип: t.name, "Пост.": t.posted, "Возвр.": t.returned, "Реал.": t.realized, "% возвр.": t.retPct.toFixed(1) }))), "По типам");
-    XLSX.writeFile(wb, `Отчёт_продажи_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Отчёт_продажи_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   const exportRanking = () => {
     const rows = ranking.map((r, i) => ({ Место: i + 1, Магазин: r.name, "Реал.": r.realized, "% возвр.": r.retPct.toFixed(1), "Доля %": r.share.toFixed(1) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Рейтинг");
-    XLSX.writeFile(wb, `Рейтинг_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Рейтинг_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   const exportDetailed = () => {
     const rows = filteredSales.map(r => ({
-      Магазин: storeName(r.store_id), Продукция: ptName(r.product_type_id), Месяц: MONTHS[m - 1],
+      Магазин: storeName(r.store_id), Продукция: ptName(r.product_type_id), Период: periodLabel,
       "Пост.": r.posted, "Возвр.": r.returned, "Реал.": r.realized, "Нач. ост.": r.opening, "Кон. ост.": r.closing,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Детально");
-    XLSX.writeFile(wb, `Детально_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Детально_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   return (
@@ -207,14 +229,45 @@ function ReportsPage() {
         <p className="text-sm text-muted-foreground">Сводные отчёты с возможностью выгрузки в Excel</p>
       </div>
 
-      <Card className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Card className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">Месяц</label>
-          <Select value={month} onValueChange={setMonth}>
+          <label className="text-xs text-muted-foreground">Период отчёта</label>
+          <Select value={periodMode} onValueChange={(value) => setPeriodMode(value as typeof periodMode)}>
             <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-            <SelectContent>{MONTHS.map((mn, i) => <SelectItem key={i} value={String(i + 1)}>{mn}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              <SelectItem value="month">За месяц</SelectItem>
+              <SelectItem value="day">За день</SelectItem>
+              <SelectItem value="range">За период</SelectItem>
+            </SelectContent>
           </Select>
         </div>
+        {periodMode === "month" && (
+          <div>
+            <label className="text-xs text-muted-foreground">Месяц</label>
+            <Select value={month} onValueChange={setMonth}>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>{MONTHS.map((mn, i) => <SelectItem key={i} value={String(i + 1)}>{mn}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        {periodMode === "day" && (
+          <div>
+            <label className="text-xs text-muted-foreground">Дата</label>
+            <DatePicker value={selectedDay} onChange={setSelectedDay} />
+          </div>
+        )}
+        {periodMode === "range" && (
+          <>
+            <div>
+              <label className="text-xs text-muted-foreground">Дата начала</label>
+              <DatePicker value={rangeStart} onChange={setRangeStart} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Дата окончания</label>
+              <DatePicker value={rangeEnd} onChange={setRangeEnd} />
+            </div>
+          </>
+        )}
         <div>
           <label className="text-xs text-muted-foreground">Тип продукции</label>
           <Select value={ptype} onValueChange={setPtype}>
@@ -312,13 +365,13 @@ function ReportsPage() {
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/60"><tr>
-                <th className="px-3 py-2 text-left">Магазин</th><th className="text-left">Прод.</th><th className="text-left">Месяц</th>
+                <th className="px-3 py-2 text-left">Магазин</th><th className="text-left">Прод.</th><th className="text-left">Период</th>
                 <th className="text-right">Пост.</th><th className="text-right">Возвр.</th><th className="text-right">Реал.</th>
                 <th className="text-right">Нач. ост.</th><th className="text-right pr-3">Кон. ост.</th>
               </tr></thead>
               <tbody>{filteredSales.map((r, i) => (
                 <tr key={i} className="border-t hover:bg-muted/30">
-                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{MONTHS[m - 1]}</td>
+                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{periodLabel}</td>
                   <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
                   <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                   <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
