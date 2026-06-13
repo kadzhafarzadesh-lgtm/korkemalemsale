@@ -5,9 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MONTHS, fmt } from "@/lib/months";
-import { Download } from "lucide-react";
+import { CalendarIcon, Download } from "lucide-react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/_authenticated/reports")({
@@ -15,10 +19,40 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 function ReportsPage() {
-  const year = new Date().getFullYear();
-  const [month, setMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const today = new Date();
+  const year = today.getFullYear();
+  const [periodMode, setPeriodMode] = useState<"month" | "day" | "range">("month");
+  const [month, setMonth] = useState<string>(String(today.getMonth() + 1));
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [rangeStart, setRangeStart] = useState<Date>(new Date(year, today.getMonth(), 1));
+  const [rangeEnd, setRangeEnd] = useState<Date>(today);
   const [ptype, setPtype] = useState<string>("all");
   const [store, setStore] = useState<string>("all");
+
+  const { startDate, endDate, periodLabel } = useMemo(() => {
+    if (periodMode === "day") {
+      return {
+        startDate: selectedDay,
+        endDate: selectedDay,
+        periodLabel: format(selectedDay, "dd.MM.yyyy"),
+      };
+    }
+    if (periodMode === "range") {
+      const from = rangeStart <= rangeEnd ? rangeStart : rangeEnd;
+      const to = rangeStart <= rangeEnd ? rangeEnd : rangeStart;
+      return {
+        startDate: from,
+        endDate: to,
+        periodLabel: `${format(from, "dd.MM.yyyy")}–${format(to, "dd.MM.yyyy")}`,
+      };
+    }
+    const selectedMonth = Number(month);
+    return {
+      startDate: new Date(year, selectedMonth - 1, 1),
+      endDate: new Date(year, selectedMonth, 0),
+      periodLabel: `${MONTHS[selectedMonth - 1]} ${year}`,
+    };
+  }, [periodMode, selectedDay, rangeStart, rangeEnd, month, year]);
 
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
@@ -29,30 +63,30 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order")).data ?? [],
   });
 
-  const m = Number(month);
   const { data: entries = [] } = useQuery({
-    queryKey: ["report-entries", year, m],
+    queryKey: ["report-entries", startDate.getFullYear(), endDate.getFullYear()],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,day,posted,returned,opening_balance,actual_balance")
-        .eq("year", year).eq("month", m).limit(50000);
+        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
+        .gte("year", startDate.getFullYear())
+        .lte("year", endDate.getFullYear())
+        .limit(50000);
+      if (error) throw error;
       return data ?? [];
     },
   });
 
   type Row = { store_id: string; product_type_id: string; posted: number; returned: number; realized: number; opening: number; closing: number };
 
-  // Все магазины × типы (с учётом фильтров), даже без данных за месяц → нули.
-  // Учитываем автоподстановку Факт.ост.: если за день не введён — берём предыдущий.
+  // Обрабатываем каждый календарный день с начала первого выбранного месяца.
+  // Это сохраняет корректную базу на середину месяца и переносит остаток между месяцами.
   const filteredSales: Row[] = useMemo(() => {
-    type Day = { day: number; posted: number; returned: number; actual_balance: number | null; opening_balance: number };
-    const grouped = new Map<string, Day[]>();
+    type Day = { posted: number; returned: number; actual_balance: number | null; opening_balance: number };
+    const byDate = new Map<string, Day>();
     for (const e of entries) {
-      const k = `${e.store_id}|${e.product_type_id}`;
-      if (!grouped.has(k)) grouped.set(k, []);
-      grouped.get(k)!.push({
-        day: e.day,
+      const k = `${e.store_id}|${e.product_type_id}|${e.year}-${e.month}-${e.day}`;
+      byDate.set(k, {
         posted: +e.posted,
         returned: +e.returned,
         actual_balance: e.actual_balance == null ? null : +e.actual_balance,
@@ -64,24 +98,45 @@ function ReportsPage() {
     const result: Row[] = [];
     for (const s of fStores) {
       for (const p of fTypes) {
-        const list = (grouped.get(`${s.id}|${p.id}`) ?? []).slice().sort((a, b) => a.day - b.day);
-        const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
-        let prevEffective: number = opening;
-        let posted = 0, returned = 0, realized = 0, closing = opening;
-        for (const d of list) {
-          const base = d.day === 1 ? opening : prevEffective;
-          const effective = d.actual_balance != null ? d.actual_balance : base;
-          realized += base + d.posted - d.returned - effective;
-          posted += d.posted;
-          returned += d.returned;
+        let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        let prevEffective = 0;
+        let posted = 0, returned = 0, realized = 0, opening = 0, closing = 0;
+        let firstSelectedDay = true;
+        while (cursor <= endDate) {
+          const y = cursor.getFullYear();
+          const mo = cursor.getMonth() + 1;
+          const day = cursor.getDate();
+          const d = byDate.get(`${s.id}|${p.id}|${y}-${mo}-${day}`);
+          if (day === 1) {
+            const enteredOpening = +(d?.opening_balance ?? 0);
+            if (enteredOpening !== 0 || cursor.getTime() === new Date(startDate.getFullYear(), startDate.getMonth(), 1).getTime()) {
+              prevEffective = enteredOpening;
+            }
+          }
+          const base = prevEffective;
+          const dayPosted = d?.posted ?? 0;
+          const dayReturned = d?.returned ?? 0;
+          const effective = d?.actual_balance != null
+            ? d.actual_balance
+            : base + dayPosted - dayReturned;
+          if (cursor >= startDate) {
+            if (firstSelectedDay) {
+              opening = base;
+              firstSelectedDay = false;
+            }
+            posted += dayPosted;
+            returned += dayReturned;
+            realized += d?.actual_balance != null ? base + dayPosted - dayReturned - effective : 0;
+            closing = effective;
+          }
           prevEffective = effective;
-          closing = effective;
+          cursor = new Date(y, mo - 1, day + 1);
         }
         result.push({ store_id: s.id, product_type_id: p.id, posted, returned, realized, opening, closing });
       }
     }
     return result;
-  }, [entries, stores, ptypes, store, ptype]);
+  }, [entries, stores, ptypes, store, ptype, startDate, endDate]);
 
 
   const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? "—";
