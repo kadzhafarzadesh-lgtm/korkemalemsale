@@ -5,20 +5,76 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MONTHS, fmt } from "@/lib/months";
-import { Download } from "lucide-react";
+import { CalendarIcon, Download } from "lucide-react";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
+function DatePicker({ value, onChange }: { value: Date; onChange: (date: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-11 w-full justify-start font-normal">
+          <CalendarIcon className="text-muted-foreground" />
+          {format(value, "dd MMMM yyyy", { locale: ru })}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={value}
+          onSelect={(date) => date && onChange(date)}
+          locale={ru}
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ReportsPage() {
-  const year = new Date().getFullYear();
-  const [month, setMonth] = useState<string>(String(new Date().getMonth() + 1));
+  const today = new Date();
+  const year = today.getFullYear();
+  const [periodMode, setPeriodMode] = useState<"month" | "day" | "range">("month");
+  const [month, setMonth] = useState<string>(String(today.getMonth() + 1));
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [rangeStart, setRangeStart] = useState<Date>(new Date(year, today.getMonth(), 1));
+  const [rangeEnd, setRangeEnd] = useState<Date>(today);
   const [ptype, setPtype] = useState<string>("all");
   const [store, setStore] = useState<string>("all");
+
+  const { startDate, endDate, periodLabel } = useMemo(() => {
+    if (periodMode === "day") {
+      return {
+        startDate: selectedDay,
+        endDate: selectedDay,
+        periodLabel: format(selectedDay, "dd.MM.yyyy"),
+      };
+    }
+    if (periodMode === "range") {
+      const from = rangeStart <= rangeEnd ? rangeStart : rangeEnd;
+      const to = rangeStart <= rangeEnd ? rangeEnd : rangeStart;
+      return {
+        startDate: from,
+        endDate: to,
+        periodLabel: `${format(from, "dd.MM.yyyy")}–${format(to, "dd.MM.yyyy")}`,
+      };
+    }
+    const selectedMonth = Number(month);
+    return {
+      startDate: new Date(year, selectedMonth - 1, 1),
+      endDate: new Date(year, selectedMonth, 0),
+      periodLabel: `${MONTHS[selectedMonth - 1]} ${year}`,
+    };
+  }, [periodMode, selectedDay, rangeStart, rangeEnd, month, year]);
 
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
@@ -29,30 +85,30 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order")).data ?? [],
   });
 
-  const m = Number(month);
   const { data: entries = [] } = useQuery({
-    queryKey: ["report-entries", year, m],
+    queryKey: ["report-entries", startDate.getFullYear(), endDate.getFullYear()],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,day,posted,returned,opening_balance,actual_balance")
-        .eq("year", year).eq("month", m).limit(50000);
+        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
+        .gte("year", startDate.getFullYear())
+        .lte("year", endDate.getFullYear())
+        .limit(50000);
+      if (error) throw error;
       return data ?? [];
     },
   });
 
   type Row = { store_id: string; product_type_id: string; posted: number; returned: number; realized: number; opening: number; closing: number };
 
-  // Все магазины × типы (с учётом фильтров), даже без данных за месяц → нули.
-  // Учитываем автоподстановку Факт.ост.: если за день не введён — берём предыдущий.
+  // Обрабатываем каждый календарный день с начала первого выбранного месяца.
+  // Это сохраняет корректную базу на середину месяца и переносит остаток между месяцами.
   const filteredSales: Row[] = useMemo(() => {
-    type Day = { day: number; posted: number; returned: number; actual_balance: number | null; opening_balance: number };
-    const grouped = new Map<string, Day[]>();
+    type Day = { posted: number; returned: number; actual_balance: number | null; opening_balance: number };
+    const byDate = new Map<string, Day>();
     for (const e of entries) {
-      const k = `${e.store_id}|${e.product_type_id}`;
-      if (!grouped.has(k)) grouped.set(k, []);
-      grouped.get(k)!.push({
-        day: e.day,
+      const k = `${e.store_id}|${e.product_type_id}|${e.year}-${e.month}-${e.day}`;
+      byDate.set(k, {
         posted: +e.posted,
         returned: +e.returned,
         actual_balance: e.actual_balance == null ? null : +e.actual_balance,
@@ -64,24 +120,45 @@ function ReportsPage() {
     const result: Row[] = [];
     for (const s of fStores) {
       for (const p of fTypes) {
-        const list = (grouped.get(`${s.id}|${p.id}`) ?? []).slice().sort((a, b) => a.day - b.day);
-        const opening = list.find((d) => d.day === 1)?.opening_balance ?? 0;
-        let prevEffective: number = opening;
-        let posted = 0, returned = 0, realized = 0, closing = opening;
-        for (const d of list) {
-          const base = d.day === 1 ? opening : prevEffective;
-          const effective = d.actual_balance != null ? d.actual_balance : base;
-          realized += base + d.posted - d.returned - effective;
-          posted += d.posted;
-          returned += d.returned;
+        let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        let prevEffective = 0;
+        let posted = 0, returned = 0, realized = 0, opening = 0, closing = 0;
+        let firstSelectedDay = true;
+        while (cursor <= endDate) {
+          const y = cursor.getFullYear();
+          const mo = cursor.getMonth() + 1;
+          const day = cursor.getDate();
+          const d = byDate.get(`${s.id}|${p.id}|${y}-${mo}-${day}`);
+          if (day === 1) {
+            const enteredOpening = +(d?.opening_balance ?? 0);
+            if (enteredOpening !== 0 || cursor.getTime() === new Date(startDate.getFullYear(), startDate.getMonth(), 1).getTime()) {
+              prevEffective = enteredOpening;
+            }
+          }
+          const base = prevEffective;
+          const dayPosted = d?.posted ?? 0;
+          const dayReturned = d?.returned ?? 0;
+          const effective = d?.actual_balance != null
+            ? d.actual_balance
+            : base + dayPosted - dayReturned;
+          if (cursor >= startDate) {
+            if (firstSelectedDay) {
+              opening = base;
+              firstSelectedDay = false;
+            }
+            posted += dayPosted;
+            returned += dayReturned;
+            realized += d?.actual_balance != null ? base + dayPosted - dayReturned - effective : 0;
+            closing = effective;
+          }
           prevEffective = effective;
-          closing = effective;
+          cursor = new Date(y, mo - 1, day + 1);
         }
         result.push({ store_id: s.id, product_type_id: p.id, posted, returned, realized, opening, closing });
       }
     }
     return result;
-  }, [entries, stores, ptypes, store, ptype]);
+  }, [entries, stores, ptypes, store, ptype, startDate, endDate]);
 
 
   const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? "—";
@@ -125,24 +202,24 @@ function ReportsPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Продажи");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(typeSummary.map(t => ({ Тип: t.name, "Пост.": t.posted, "Возвр.": t.returned, "Реал.": t.realized, "% возвр.": t.retPct.toFixed(1) }))), "По типам");
-    XLSX.writeFile(wb, `Отчёт_продажи_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Отчёт_продажи_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   const exportRanking = () => {
     const rows = ranking.map((r, i) => ({ Место: i + 1, Магазин: r.name, "Реал.": r.realized, "% возвр.": r.retPct.toFixed(1), "Доля %": r.share.toFixed(1) }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Рейтинг");
-    XLSX.writeFile(wb, `Рейтинг_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Рейтинг_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   const exportDetailed = () => {
     const rows = filteredSales.map(r => ({
-      Магазин: storeName(r.store_id), Продукция: ptName(r.product_type_id), Месяц: MONTHS[m - 1],
+      Магазин: storeName(r.store_id), Продукция: ptName(r.product_type_id), Период: periodLabel,
       "Пост.": r.posted, "Возвр.": r.returned, "Реал.": r.realized, "Нач. ост.": r.opening, "Кон. ост.": r.closing,
     }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Детально");
-    XLSX.writeFile(wb, `Детально_${MONTHS[m - 1]}_${year}.xlsx`);
+    XLSX.writeFile(wb, `Детально_${periodLabel.replaceAll(".", "-")}.xlsx`);
   };
 
   return (
@@ -152,14 +229,45 @@ function ReportsPage() {
         <p className="text-sm text-muted-foreground">Сводные отчёты с возможностью выгрузки в Excel</p>
       </div>
 
-      <Card className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <Card className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
-          <label className="text-xs text-muted-foreground">Месяц</label>
-          <Select value={month} onValueChange={setMonth}>
+          <label className="text-xs text-muted-foreground">Период отчёта</label>
+          <Select value={periodMode} onValueChange={(value) => setPeriodMode(value as typeof periodMode)}>
             <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-            <SelectContent>{MONTHS.map((mn, i) => <SelectItem key={i} value={String(i + 1)}>{mn}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              <SelectItem value="month">За месяц</SelectItem>
+              <SelectItem value="day">За день</SelectItem>
+              <SelectItem value="range">За период</SelectItem>
+            </SelectContent>
           </Select>
         </div>
+        {periodMode === "month" && (
+          <div>
+            <label className="text-xs text-muted-foreground">Месяц</label>
+            <Select value={month} onValueChange={setMonth}>
+              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>{MONTHS.map((mn, i) => <SelectItem key={i} value={String(i + 1)}>{mn}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+        {periodMode === "day" && (
+          <div>
+            <label className="text-xs text-muted-foreground">Дата</label>
+            <DatePicker value={selectedDay} onChange={setSelectedDay} />
+          </div>
+        )}
+        {periodMode === "range" && (
+          <>
+            <div>
+              <label className="text-xs text-muted-foreground">Дата начала</label>
+              <DatePicker value={rangeStart} onChange={setRangeStart} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Дата окончания</label>
+              <DatePicker value={rangeEnd} onChange={setRangeEnd} />
+            </div>
+          </>
+        )}
         <div>
           <label className="text-xs text-muted-foreground">Тип продукции</label>
           <Select value={ptype} onValueChange={setPtype}>
@@ -257,13 +365,13 @@ function ReportsPage() {
           <Card className="overflow-x-auto p-0">
             <table className="w-full text-sm">
               <thead className="bg-muted/60"><tr>
-                <th className="px-3 py-2 text-left">Магазин</th><th className="text-left">Прод.</th><th className="text-left">Месяц</th>
+                <th className="px-3 py-2 text-left">Магазин</th><th className="text-left">Прод.</th><th className="text-left">Период</th>
                 <th className="text-right">Пост.</th><th className="text-right">Возвр.</th><th className="text-right">Реал.</th>
                 <th className="text-right">Нач. ост.</th><th className="text-right pr-3">Кон. ост.</th>
               </tr></thead>
               <tbody>{filteredSales.map((r, i) => (
                 <tr key={i} className="border-t hover:bg-muted/30">
-                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{MONTHS[m - 1]}</td>
+                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{periodLabel}</td>
                   <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
                   <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                   <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
