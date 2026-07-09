@@ -170,9 +170,10 @@ function MonthPage() {
       for (const e of list) {
         const base = e.day === 1 ? (opening != null ? +opening : null) : prevEff;
         const manual = e.actual_balance != null ? +e.actual_balance : null;
+        const wo = +((e as any).written_off ?? 0);
         let eff: number | null;
         if (manual != null) eff = manual;
-        else if (base != null) eff = base + (+e.posted) - (+e.returned);
+        else if (base != null) eff = base + (+e.posted) - (+e.returned) - wo;
         else eff = null;
         prevEff = eff;
         if (eff != null) lastEffective = eff;
