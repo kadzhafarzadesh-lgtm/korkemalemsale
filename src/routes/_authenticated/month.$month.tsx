@@ -185,9 +185,8 @@ function MonthPage() {
 
   const days = daysInMonth(year, m);
 
-  const today = new Date();
-  const defaultDay =
-    today.getFullYear() === year && today.getMonth() + 1 === m ? today.getDate() : 1;
+  const _t = todayAqtauParts();
+  const defaultDay = _t.year === year && _t.month === m ? _t.day : 1;
   const [selectedDay, setSelectedDay] = useState(defaultDay);
 
   const byKey = useMemo(() => {
