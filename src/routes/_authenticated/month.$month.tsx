@@ -276,27 +276,18 @@ function MonthPage() {
     storeId: string,
     ptypeId: string,
     day: number,
-    field: "posted" | "returned" | "opening_balance" | "actual_balance",
+    field: "posted" | "returned" | "opening_balance" | "actual_balance" | "written_off",
     value: number | null,
   ) => {
     if (readOnly) return;
-    const existing = getDay(storeId, ptypeId, day);
-    const payload: any = {
-      ...(existing ?? {
-        store_id: storeId,
-        product_type_id: ptypeId,
-        year,
-        month: m,
-        day,
-        posted: 0,
-        returned: 0,
-        actual_balance: null,
-        realized: 0,
-        opening_balance: 0,
-      }),
+    const payload: Record<string, unknown> = {
+      store_id: storeId,
+      product_type_id: ptypeId,
+      year,
+      month: m,
+      day,
       [field]: value,
     };
-
     const { error } = await supabase
       .from("daily_entries")
       .upsert(payload, { onConflict: "store_id,product_type_id,year,month,day" });
