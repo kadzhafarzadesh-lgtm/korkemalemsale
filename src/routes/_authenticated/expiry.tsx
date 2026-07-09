@@ -68,11 +68,18 @@ function ExpiryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard label="Просрочено" value={data?.totals.expired ?? 0} icon={XCircle} tone="destructive" />
         <StatCard label="< 3 дней" value={data?.totals.critical ?? 0} icon={AlertTriangle} tone="warning" />
         <StatCard label="< 5 дней" value={data?.totals.warning ?? 0} icon={Clock} tone="amber" />
         <StatCard label="В норме" value={data?.totals.ok ?? 0} icon={CheckCircle2} tone="ok" />
+        <StatCard
+          label="Потери, ₸"
+          value={data?.loss_amount ?? 0}
+          icon={Coins}
+          tone="destructive"
+          formatter={(v) => new Intl.NumberFormat("ru-RU").format(v)}
+        />
       </div>
 
       <Card className="p-4 space-y-3">
