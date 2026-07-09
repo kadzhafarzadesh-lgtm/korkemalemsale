@@ -41,7 +41,7 @@ function truncate(s: string, n: number) {
 function MonthPage() {
   const { month } = Route.useParams();
   const m = Number(month);
-  const year = new Date().getFullYear();
+  const year = todayAqtauParts().year;
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const { canWrite, isViewer } = useAuth();
@@ -54,7 +54,8 @@ function MonthPage() {
         .from("stores")
         .select("id,name,sort_order,counterparty_id")
         .eq("is_active", true)
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as Store[];
     },
@@ -66,7 +67,8 @@ function MonthPage() {
       const { data, error } = await supabase
         .from("counterparties")
         .select("id,name,sort_order")
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as Counterparty[];
     },
@@ -78,11 +80,30 @@ function MonthPage() {
       const { data, error } = await supabase
         .from("product_types")
         .select("id,name,sort_order")
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as PType[];
     },
   });
+
+  // Realtime: invalidate current month on any daily_entries change for this year.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`de-${year}-${m}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_entries", filter: `year=eq.${year}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["entries", year, m] });
+          qc.invalidateQueries({ queryKey: ["entries", m === 1 ? year - 1 : year, m === 1 ? 12 : m - 1] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, year, m]);
 
   const [filterCp, setFilterCp] = useState<string>("all");
   const [filterStore, setFilterStore] = useState<string>("all");
