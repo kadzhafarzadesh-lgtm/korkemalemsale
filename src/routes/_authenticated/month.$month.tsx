@@ -290,7 +290,7 @@ function MonthPage() {
     };
     const { error } = await supabase
       .from("daily_entries")
-      .upsert(payload, { onConflict: "store_id,product_type_id,year,month,day" });
+      .upsert(payload as any, { onConflict: "store_id,product_type_id,year,month,day" });
     if (error) {
       toast.error("Ошибка сохранения", { description: error.message });
       return;
