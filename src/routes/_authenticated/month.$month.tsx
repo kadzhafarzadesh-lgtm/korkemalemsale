@@ -419,9 +419,9 @@ function MonthPage() {
           getComp={getComp}
           saveCell={saveCell}
           dayTotals={dayTotals}
-          isCurrentMonth={today.getFullYear() === year && today.getMonth() + 1 === m}
-          isPastMonth={year < today.getFullYear() || (year === today.getFullYear() && m < today.getMonth() + 1)}
-          currentDay={today.getDate()}
+          isCurrentMonth={_t.year === year && _t.month === m}
+          isPastMonth={year < _t.year || (year === _t.year && m < _t.month)}
+          currentDay={_t.day}
           readOnly={readOnly}
         />
       )}
