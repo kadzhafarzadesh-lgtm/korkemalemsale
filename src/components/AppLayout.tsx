@@ -40,6 +40,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         <NavItem to="/" icon={Home} label="Главная" />
+        <NavItem to="/today" icon={ClipboardList} label="Ввод за день" />
+        <NavItem to="/stock" icon={Package} label="Остатки" />
 
         <button
           onClick={() => setMonthsOpen((v) => !v)}
