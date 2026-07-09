@@ -24,6 +24,9 @@ export const Route = createFileRoute("/_authenticated/expiry")({
 
 function ExpiryPage() {
   const fetchReport = useServerFn(getExpiryReport);
+  const writeOff = useServerFn(writeOffBatch);
+  const qc = useQueryClient();
+  const { canWrite } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["expiry-report"],
     queryFn: () => fetchReport({}),
