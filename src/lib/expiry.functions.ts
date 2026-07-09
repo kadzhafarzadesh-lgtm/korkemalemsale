@@ -136,6 +136,7 @@ export const getExpiryReport = createServerFn({ method: "GET" })
           product_id: productId,
           product_name: product.name,
           shelf_life_days: shelf,
+          price: product.price != null ? Number(product.price) : null,
           received_date: b.date,
           is_synthetic: b.synthetic,
           qty: Math.round(b.qty * 100) / 100,
@@ -145,16 +146,19 @@ export const getExpiryReport = createServerFn({ method: "GET" })
       }
     }
 
-    // sort: most urgent first
     batches.sort((a, b) => a.days_left - b.days_left);
 
     const totals = { expired: 0, critical: 0, warning: 0, ok: 0 };
+    let loss_amount = 0;
     for (const b of batches) {
-      if (b.days_left < 0) totals.expired++;
+      if (b.days_left < 0) {
+        totals.expired++;
+        if (b.price != null) loss_amount += b.qty * b.price;
+      }
       else if (b.days_left < 3) totals.critical++;
       else if (b.days_left < 5) totals.warning++;
       else totals.ok++;
     }
 
-    return { today, batches, totals };
+    return { today, batches, totals, loss_amount: Math.round(loss_amount * 100) / 100 };
   });
