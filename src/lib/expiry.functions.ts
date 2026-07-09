@@ -107,16 +107,13 @@ export const getExpiryReport = createServerFn({ method: "GET" })
 
         // consumption = realized + returned (both physically leave stock from oldest first)
         const returned = Number(row.returned) || 0;
-        // Effective realization: if actual_balance is null we don't know realized,
-        // assume zero realization that day (auto-fact path). If present, compute.
+        const writtenOff = Number(row.written_off) || 0;
         let realized = 0;
         if (row.actual_balance !== null && row.actual_balance !== undefined) {
-          // Reconstruct opening from queue total BEFORE today's posted? We already
-          // pushed posted; queue total now equals opening+posted. realized = queue - returned - actual.
           const total = queue.reduce((s, b) => s + b.qty, 0);
-          realized = Math.max(0, total - returned - Number(row.actual_balance));
+          realized = Math.max(0, total - returned - writtenOff - Number(row.actual_balance));
         }
-        let consume = realized + returned;
+        let consume = realized + returned + writtenOff;
         while (consume > 0 && queue.length) {
           const head = queue[0];
           if (head.qty <= consume) {
