@@ -163,3 +163,38 @@ export const getExpiryReport = createServerFn({ method: "GET" })
 
     return { today, batches, totals, loss_amount: Math.round(loss_amount * 100) / 100 };
   });
+
+export const writeOffBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { store_id: string; product_type_id: string; qty: number }) =>
+    z.object({
+      store_id: z.string().uuid(),
+      product_type_id: z.string().uuid(),
+      qty: z.number().positive(),
+    }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Aqtau" }).format(new Date());
+    const [y, mo, d] = today.split("-").map(Number);
+    // Read current row (if any) to add on top of existing written_off
+    const { data: existing } = await supabase
+      .from("daily_entries")
+      .select("written_off")
+      .eq("store_id", data.store_id)
+      .eq("product_type_id", data.product_type_id)
+      .eq("year", y).eq("month", mo).eq("day", d)
+      .maybeSingle();
+    const current = Number((existing as any)?.written_off ?? 0);
+    const payload = {
+      store_id: data.store_id,
+      product_type_id: data.product_type_id,
+      year: y, month: mo, day: d,
+      written_off: current + data.qty,
+    };
+    const { error } = await supabase
+      .from("daily_entries")
+      .upsert(payload as any, { onConflict: "store_id,product_type_id,year,month,day" });
+    if (error) throw error;
+    return { ok: true, date: today };
+  });
