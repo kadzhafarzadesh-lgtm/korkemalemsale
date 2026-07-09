@@ -140,7 +140,7 @@ function MonthPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,day,actual_balance,opening_balance,posted,returned")
+        .select("store_id,product_type_id,day,actual_balance,opening_balance,posted,returned,written_off")
         .eq("year", prevYear)
         .eq("month", prevMonth)
         .limit(50000);
