@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { MONTHS } from "@/lib/months";
-import { Home, FileText, Settings, LogOut, ChevronDown, Calendar, AlertTriangle } from "lucide-react";
+import { Home, FileText, Settings, LogOut, ChevronDown, Calendar, AlertTriangle, ClipboardList, Package } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,6 +40,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         <NavItem to="/" icon={Home} label="Главная" />
+        <NavItem to="/today" icon={ClipboardList} label="Ввод за день" />
+        <NavItem to="/stock" icon={Package} label="Остатки" />
 
         <button
           onClick={() => setMonthsOpen((v) => !v)}

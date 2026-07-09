@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
 
 export type ExpiryBatch = {
   store_id: string;
@@ -7,17 +8,19 @@ export type ExpiryBatch = {
   product_id: string;
   product_name: string;
   shelf_life_days: number;
+  price: number | null;
   received_date: string; // YYYY-MM-DD ("opening" for synthetic)
-  is_synthetic: boolean; // true when batch came from opening_balance (date approx.)
+  is_synthetic: boolean;
   qty: number;
-  expires_at: string; // YYYY-MM-DD
-  days_left: number; // can be negative when expired
+  expires_at: string;
+  days_left: number;
 };
 
 export type ExpirySummary = {
   today: string;
   batches: ExpiryBatch[];
   totals: { expired: number; critical: number; warning: number; ok: number };
+  loss_amount: number; // ₸ по просрочке (сумма qty*price для days_left<0, если price задана)
 };
 
 function toISO(y: number, m: number, d: number) {
@@ -42,14 +45,14 @@ export const getExpiryReport = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<ExpirySummary> => {
     const { supabase } = context;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Aqtau" }).format(new Date());
 
     const [storesRes, ptypesRes, entriesRes] = await Promise.all([
-      supabase.from("stores").select("id,name,is_active,sort_order").order("sort_order"),
-      supabase.from("product_types").select("id,name,shelf_life_days,sort_order").order("sort_order"),
+      supabase.from("stores").select("id,name,is_active,sort_order").order("sort_order").order("name"),
+      supabase.from("product_types").select("id,name,shelf_life_days,sort_order,price").order("sort_order").order("name"),
       supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,opening_balance,posted,returned,actual_balance")
+        .select("store_id,product_type_id,year,month,day,opening_balance,posted,returned,written_off,actual_balance")
         .order("year").order("month").order("day"),
     ]);
 
@@ -105,16 +108,13 @@ export const getExpiryReport = createServerFn({ method: "GET" })
 
         // consumption = realized + returned (both physically leave stock from oldest first)
         const returned = Number(row.returned) || 0;
-        // Effective realization: if actual_balance is null we don't know realized,
-        // assume zero realization that day (auto-fact path). If present, compute.
+        const writtenOff = Number(row.written_off) || 0;
         let realized = 0;
         if (row.actual_balance !== null && row.actual_balance !== undefined) {
-          // Reconstruct opening from queue total BEFORE today's posted? We already
-          // pushed posted; queue total now equals opening+posted. realized = queue - returned - actual.
           const total = queue.reduce((s, b) => s + b.qty, 0);
-          realized = Math.max(0, total - returned - Number(row.actual_balance));
+          realized = Math.max(0, total - returned - writtenOff - Number(row.actual_balance));
         }
-        let consume = realized + returned;
+        let consume = realized + returned + writtenOff;
         while (consume > 0 && queue.length) {
           const head = queue[0];
           if (head.qty <= consume) {
@@ -137,6 +137,7 @@ export const getExpiryReport = createServerFn({ method: "GET" })
           product_id: productId,
           product_name: product.name,
           shelf_life_days: shelf,
+          price: product.price != null ? Number(product.price) : null,
           received_date: b.date,
           is_synthetic: b.synthetic,
           qty: Math.round(b.qty * 100) / 100,
@@ -146,16 +147,54 @@ export const getExpiryReport = createServerFn({ method: "GET" })
       }
     }
 
-    // sort: most urgent first
     batches.sort((a, b) => a.days_left - b.days_left);
 
     const totals = { expired: 0, critical: 0, warning: 0, ok: 0 };
+    let loss_amount = 0;
     for (const b of batches) {
-      if (b.days_left < 0) totals.expired++;
+      if (b.days_left < 0) {
+        totals.expired++;
+        if (b.price != null) loss_amount += b.qty * b.price;
+      }
       else if (b.days_left < 3) totals.critical++;
       else if (b.days_left < 5) totals.warning++;
       else totals.ok++;
     }
 
-    return { today, batches, totals };
+    return { today, batches, totals, loss_amount: Math.round(loss_amount * 100) / 100 };
+  });
+
+export const writeOffBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { store_id: string; product_type_id: string; qty: number }) =>
+    z.object({
+      store_id: z.string().uuid(),
+      product_type_id: z.string().uuid(),
+      qty: z.number().positive(),
+    }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Aqtau" }).format(new Date());
+    const [y, mo, d] = today.split("-").map(Number);
+    // Read current row (if any) to add on top of existing written_off
+    const { data: existing } = await supabase
+      .from("daily_entries")
+      .select("written_off")
+      .eq("store_id", data.store_id)
+      .eq("product_type_id", data.product_type_id)
+      .eq("year", y).eq("month", mo).eq("day", d)
+      .maybeSingle();
+    const current = Number((existing as any)?.written_off ?? 0);
+    const payload = {
+      store_id: data.store_id,
+      product_type_id: data.product_type_id,
+      year: y, month: mo, day: d,
+      written_off: current + data.qty,
+    };
+    const { error } = await supabase
+      .from("daily_entries")
+      .upsert(payload as any, { onConflict: "store_id,product_type_id,year,month,day" });
+    if (error) throw error;
+    return { ok: true, date: today };
   });

@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Loader2, AlertTriangle, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { getExpiryReport, type ExpiryBatch } from "@/lib/expiry.functions";
+import { Loader2, AlertTriangle, Clock, CheckCircle2, XCircle, Trash2, Coins } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { getExpiryReport, writeOffBatch, type ExpiryBatch } from "@/lib/expiry.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/expiry")({
@@ -21,6 +24,9 @@ export const Route = createFileRoute("/_authenticated/expiry")({
 
 function ExpiryPage() {
   const fetchReport = useServerFn(getExpiryReport);
+  const writeOff = useServerFn(writeOffBatch);
+  const qc = useQueryClient();
+  const { canWrite } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["expiry-report"],
     queryFn: () => fetchReport({}),
@@ -30,7 +36,7 @@ function ExpiryPage() {
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
     queryFn: async () =>
-      (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order")).data ?? [],
+      (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order").order("name")).data ?? [],
   });
 
   const [storeFilter, setStoreFilter] = useState<string>("all");
@@ -62,11 +68,18 @@ function ExpiryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard label="Просрочено" value={data?.totals.expired ?? 0} icon={XCircle} tone="destructive" />
         <StatCard label="< 3 дней" value={data?.totals.critical ?? 0} icon={AlertTriangle} tone="warning" />
         <StatCard label="< 5 дней" value={data?.totals.warning ?? 0} icon={Clock} tone="amber" />
         <StatCard label="В норме" value={data?.totals.ok ?? 0} icon={CheckCircle2} tone="ok" />
+        <StatCard
+          label="Потери, ₸"
+          value={data?.loss_amount ?? 0}
+          icon={Coins}
+          tone="destructive"
+          formatter={(v) => new Intl.NumberFormat("ru-RU").format(v)}
+        />
       </div>
 
       <Card className="p-4 space-y-3">
@@ -113,10 +126,27 @@ function ExpiryPage() {
                   <th className="px-2">Поступление</th>
                   <th className="px-2">Срок до</th>
                   <th className="px-2 text-right">Дней</th>
+                  {canWrite && <th className="px-2"></th>}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((b, i) => <BatchRow key={i} b={b} />)}
+                {filtered.map((b, i) => (
+                  <BatchRow
+                    key={i}
+                    b={b}
+                    canWrite={canWrite}
+                    onWriteOff={async () => {
+                      try {
+                        await writeOff({ data: { store_id: b.store_id, product_type_id: b.product_id, qty: b.qty } });
+                        toast.success(`Списано ${b.qty} шт.`);
+                        qc.invalidateQueries({ queryKey: ["expiry-report"] });
+                        qc.invalidateQueries({ queryKey: ["entries"] });
+                      } catch (e: any) {
+                        toast.error("Ошибка списания", { description: e?.message });
+                      }
+                    }}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
@@ -138,7 +168,7 @@ function statusTone(days: number) {
   return { label: "В норме", className: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400" };
 }
 
-function BatchRow({ b }: { b: ExpiryBatch }) {
+function BatchRow({ b, canWrite, onWriteOff }: { b: ExpiryBatch; canWrite: boolean; onWriteOff: () => void }) {
   const tone = statusTone(b.days_left);
   return (
     <tr className="border-t">
@@ -156,11 +186,25 @@ function BatchRow({ b }: { b: ExpiryBatch }) {
       <td className={cn("px-2 text-right tabular-nums font-medium", b.days_left < 0 ? "text-destructive" : b.days_left < 3 ? "text-orange-600 dark:text-orange-400" : b.days_left < 5 ? "text-amber-700 dark:text-amber-400" : "")}>
         {b.days_left < 0 ? `${b.days_left}` : b.days_left}
       </td>
+      {canWrite && (
+        <td className="px-2 text-right">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-destructive hover:text-destructive"
+            onClick={() => {
+              if (confirm(`Списать ${b.qty} шт. «${b.product_name}»?`)) onWriteOff();
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1" /> Списать
+          </Button>
+        </td>
+      )}
     </tr>
   );
 }
 
-function StatCard({ label, value, icon: Icon, tone }: { label: string; value: number; icon: any; tone: "destructive" | "warning" | "amber" | "ok" }) {
+function StatCard({ label, value, icon: Icon, tone, formatter }: { label: string; value: number; icon: any; tone: "destructive" | "warning" | "amber" | "ok"; formatter?: (v: number) => string }) {
   const colors = {
     destructive: "text-destructive bg-destructive/10",
     warning: "text-orange-600 bg-orange-500/10 dark:text-orange-400",
@@ -173,7 +217,7 @@ function StatCard({ label, value, icon: Icon, tone }: { label: string; value: nu
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        <div className="text-2xl font-semibold tabular-nums">{formatter ? formatter(value) : value}</div>
         <div className="text-xs text-muted-foreground">{label}</div>
       </div>
     </Card>

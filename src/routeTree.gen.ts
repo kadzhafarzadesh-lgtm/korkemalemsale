@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
+import { Route as AuthenticatedStockRouteImport } from './routes/_authenticated/stock'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedExpiryRouteImport } from './routes/_authenticated/expiry'
@@ -29,6 +31,16 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTodayRoute = AuthenticatedTodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedStockRoute = AuthenticatedStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -58,6 +70,8 @@ export interface FileRoutesByFullPath {
   '/expiry': typeof AuthenticatedExpiryRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/stock': typeof AuthenticatedStockRoute
+  '/today': typeof AuthenticatedTodayRoute
   '/month/$month': typeof AuthenticatedMonthMonthRoute
 }
 export interface FileRoutesByTo {
@@ -65,6 +79,8 @@ export interface FileRoutesByTo {
   '/expiry': typeof AuthenticatedExpiryRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/stock': typeof AuthenticatedStockRoute
+  '/today': typeof AuthenticatedTodayRoute
   '/': typeof AuthenticatedIndexRoute
   '/month/$month': typeof AuthenticatedMonthMonthRoute
 }
@@ -75,6 +91,8 @@ export interface FileRoutesById {
   '/_authenticated/expiry': typeof AuthenticatedExpiryRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/stock': typeof AuthenticatedStockRoute
+  '/_authenticated/today': typeof AuthenticatedTodayRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/month/$month': typeof AuthenticatedMonthMonthRoute
 }
@@ -86,9 +104,19 @@ export interface FileRouteTypes {
     | '/expiry'
     | '/reports'
     | '/settings'
+    | '/stock'
+    | '/today'
     | '/month/$month'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/expiry' | '/reports' | '/settings' | '/' | '/month/$month'
+  to:
+    | '/auth'
+    | '/expiry'
+    | '/reports'
+    | '/settings'
+    | '/stock'
+    | '/today'
+    | '/'
+    | '/month/$month'
   id:
     | '__root__'
     | '/_authenticated'
@@ -96,6 +124,8 @@ export interface FileRouteTypes {
     | '/_authenticated/expiry'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
+    | '/_authenticated/stock'
+    | '/_authenticated/today'
     | '/_authenticated/'
     | '/_authenticated/month/$month'
   fileRoutesById: FileRoutesById
@@ -126,6 +156,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/today': {
+      id: '/_authenticated/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof AuthenticatedTodayRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/stock': {
+      id: '/_authenticated/stock'
+      path: '/stock'
+      fullPath: '/stock'
+      preLoaderRoute: typeof AuthenticatedStockRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings': {
@@ -163,6 +207,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedExpiryRoute: typeof AuthenticatedExpiryRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedStockRoute: typeof AuthenticatedStockRoute
+  AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedMonthMonthRoute: typeof AuthenticatedMonthMonthRoute
 }
@@ -171,6 +217,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedExpiryRoute: AuthenticatedExpiryRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedStockRoute: AuthenticatedStockRoute,
+  AuthenticatedTodayRoute: AuthenticatedTodayRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedMonthMonthRoute: AuthenticatedMonthMonthRoute,
 }

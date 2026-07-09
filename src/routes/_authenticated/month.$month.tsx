@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { MONTHS, daysInMonth, fmt } from "@/lib/months";
+import { MONTHS, daysInMonth, fmt, todayAqtauParts } from "@/lib/months";
 import { Loader2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -22,6 +22,7 @@ type Entry = {
   day: number;
   posted: number;
   returned: number;
+  written_off: number;
   actual_balance: number | null;
   realized: number;
   opening_balance: number;
@@ -40,7 +41,7 @@ function truncate(s: string, n: number) {
 function MonthPage() {
   const { month } = Route.useParams();
   const m = Number(month);
-  const year = new Date().getFullYear();
+  const year = todayAqtauParts().year;
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const { canWrite, isViewer } = useAuth();
@@ -53,7 +54,8 @@ function MonthPage() {
         .from("stores")
         .select("id,name,sort_order,counterparty_id")
         .eq("is_active", true)
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as Store[];
     },
@@ -65,7 +67,8 @@ function MonthPage() {
       const { data, error } = await supabase
         .from("counterparties")
         .select("id,name,sort_order")
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as Counterparty[];
     },
@@ -77,11 +80,30 @@ function MonthPage() {
       const { data, error } = await supabase
         .from("product_types")
         .select("id,name,sort_order")
-        .order("sort_order");
+        .order("sort_order")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as PType[];
     },
   });
+
+  // Realtime: invalidate current month on any daily_entries change for this year.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`de-${year}-${m}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "daily_entries", filter: `year=eq.${year}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ["entries", year, m] });
+          qc.invalidateQueries({ queryKey: ["entries", m === 1 ? year - 1 : year, m === 1 ? 12 : m - 1] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, year, m]);
 
   const [filterCp, setFilterCp] = useState<string>("all");
   const [filterStore, setFilterStore] = useState<string>("all");
@@ -118,7 +140,7 @@ function MonthPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,day,actual_balance,opening_balance,posted,returned")
+        .select("store_id,product_type_id,day,actual_balance,opening_balance,posted,returned,written_off")
         .eq("year", prevYear)
         .eq("month", prevMonth)
         .limit(50000);
@@ -148,9 +170,10 @@ function MonthPage() {
       for (const e of list) {
         const base = e.day === 1 ? (opening != null ? +opening : null) : prevEff;
         const manual = e.actual_balance != null ? +e.actual_balance : null;
+        const wo = +((e as any).written_off ?? 0);
         let eff: number | null;
         if (manual != null) eff = manual;
-        else if (base != null) eff = base + (+e.posted) - (+e.returned);
+        else if (base != null) eff = base + (+e.posted) - (+e.returned) - wo;
         else eff = null;
         prevEff = eff;
         if (eff != null) lastEffective = eff;
@@ -162,9 +185,8 @@ function MonthPage() {
 
   const days = daysInMonth(year, m);
 
-  const today = new Date();
-  const defaultDay =
-    today.getFullYear() === year && today.getMonth() + 1 === m ? today.getDate() : 1;
+  const _t = todayAqtauParts();
+  const defaultDay = _t.year === year && _t.month === m ? _t.day : 1;
   const [selectedDay, setSelectedDay] = useState(defaultDay);
 
   const byKey = useMemo(() => {
@@ -213,6 +235,7 @@ function MonthPage() {
         const e = getDay(store.id, ptype.id, d);
         const posted = +(e?.posted ?? 0);
         const returned = +(e?.returned ?? 0);
+        const writtenOff = +((e as any)?.written_off ?? 0);
         const manualRaw = e?.actual_balance;
         const hasManual = manualRaw != null && !Number.isNaN(+manualRaw);
         const manual: number | null = hasManual ? +manualRaw! : null;
@@ -224,11 +247,11 @@ function MonthPage() {
         let isAuto: boolean;
         if (manual != null) {
           effective = manual;
-          realized = base != null ? base + posted - returned - manual : null;
+          realized = base != null ? base + posted - returned - writtenOff - manual : null;
           isAuto = false;
         } else if (base != null) {
-          // Auto: pretend actual = base + posted - returned, so realized strictly = 0
-          effective = base + posted - returned;
+          // Auto: pretend actual = base + posted - returned - written_off, so realized = 0
+          effective = base + posted - returned - writtenOff;
           realized = 0;
           isAuto = true;
         } else {
@@ -253,30 +276,21 @@ function MonthPage() {
     storeId: string,
     ptypeId: string,
     day: number,
-    field: "posted" | "returned" | "opening_balance" | "actual_balance",
+    field: "posted" | "returned" | "opening_balance" | "actual_balance" | "written_off",
     value: number | null,
   ) => {
     if (readOnly) return;
-    const existing = getDay(storeId, ptypeId, day);
-    const payload: any = {
-      ...(existing ?? {
-        store_id: storeId,
-        product_type_id: ptypeId,
-        year,
-        month: m,
-        day,
-        posted: 0,
-        returned: 0,
-        actual_balance: null,
-        realized: 0,
-        opening_balance: 0,
-      }),
+    const payload: Record<string, unknown> = {
+      store_id: storeId,
+      product_type_id: ptypeId,
+      year,
+      month: m,
+      day,
       [field]: value,
     };
-
     const { error } = await supabase
       .from("daily_entries")
-      .upsert(payload, { onConflict: "store_id,product_type_id,year,month,day" });
+      .upsert(payload as any, { onConflict: "store_id,product_type_id,year,month,day" });
     if (error) {
       toast.error("Ошибка сохранения", { description: error.message });
       return;
@@ -397,9 +411,9 @@ function MonthPage() {
           getComp={getComp}
           saveCell={saveCell}
           dayTotals={dayTotals}
-          isCurrentMonth={today.getFullYear() === year && today.getMonth() + 1 === m}
-          isPastMonth={year < today.getFullYear() || (year === today.getFullYear() && m < today.getMonth() + 1)}
-          currentDay={today.getDate()}
+          isCurrentMonth={_t.year === year && _t.month === m}
+          isPastMonth={year < _t.year || (year === _t.year && m < _t.month)}
+          currentDay={_t.day}
           readOnly={readOnly}
         />
       )}
