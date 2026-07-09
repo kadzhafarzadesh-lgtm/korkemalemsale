@@ -235,6 +235,7 @@ function MonthPage() {
         const e = getDay(store.id, ptype.id, d);
         const posted = +(e?.posted ?? 0);
         const returned = +(e?.returned ?? 0);
+        const writtenOff = +((e as any)?.written_off ?? 0);
         const manualRaw = e?.actual_balance;
         const hasManual = manualRaw != null && !Number.isNaN(+manualRaw);
         const manual: number | null = hasManual ? +manualRaw! : null;
@@ -246,11 +247,11 @@ function MonthPage() {
         let isAuto: boolean;
         if (manual != null) {
           effective = manual;
-          realized = base != null ? base + posted - returned - manual : null;
+          realized = base != null ? base + posted - returned - writtenOff - manual : null;
           isAuto = false;
         } else if (base != null) {
-          // Auto: pretend actual = base + posted - returned, so realized strictly = 0
-          effective = base + posted - returned;
+          // Auto: pretend actual = base + posted - returned - written_off, so realized = 0
+          effective = base + posted - returned - writtenOff;
           realized = 0;
           isAuto = true;
         } else {
