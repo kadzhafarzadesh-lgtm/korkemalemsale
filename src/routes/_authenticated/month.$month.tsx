@@ -22,6 +22,7 @@ type Entry = {
   day: number;
   posted: number;
   returned: number;
+  written_off: number;
   actual_balance: number | null;
   realized: number;
   opening_balance: number;
