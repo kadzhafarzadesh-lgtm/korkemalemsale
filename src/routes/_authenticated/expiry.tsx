@@ -126,10 +126,27 @@ function ExpiryPage() {
                   <th className="px-2">Поступление</th>
                   <th className="px-2">Срок до</th>
                   <th className="px-2 text-right">Дней</th>
+                  {canWrite && <th className="px-2"></th>}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((b, i) => <BatchRow key={i} b={b} />)}
+                {filtered.map((b, i) => (
+                  <BatchRow
+                    key={i}
+                    b={b}
+                    canWrite={canWrite}
+                    onWriteOff={async () => {
+                      try {
+                        await writeOff({ data: { store_id: b.store_id, product_type_id: b.product_id, qty: b.qty } });
+                        toast.success(`Списано ${b.qty} шт.`);
+                        qc.invalidateQueries({ queryKey: ["expiry-report"] });
+                        qc.invalidateQueries({ queryKey: ["entries"] });
+                      } catch (e: any) {
+                        toast.error("Ошибка списания", { description: e?.message });
+                      }
+                    }}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
@@ -151,7 +168,7 @@ function statusTone(days: number) {
   return { label: "В норме", className: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400" };
 }
 
-function BatchRow({ b }: { b: ExpiryBatch }) {
+function BatchRow({ b, canWrite, onWriteOff }: { b: ExpiryBatch; canWrite: boolean; onWriteOff: () => void }) {
   const tone = statusTone(b.days_left);
   return (
     <tr className="border-t">
@@ -169,11 +186,25 @@ function BatchRow({ b }: { b: ExpiryBatch }) {
       <td className={cn("px-2 text-right tabular-nums font-medium", b.days_left < 0 ? "text-destructive" : b.days_left < 3 ? "text-orange-600 dark:text-orange-400" : b.days_left < 5 ? "text-amber-700 dark:text-amber-400" : "")}>
         {b.days_left < 0 ? `${b.days_left}` : b.days_left}
       </td>
+      {canWrite && (
+        <td className="px-2 text-right">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-destructive hover:text-destructive"
+            onClick={() => {
+              if (confirm(`Списать ${b.qty} шт. «${b.product_name}»?`)) onWriteOff();
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1" /> Списать
+          </Button>
+        </td>
+      )}
     </tr>
   );
 }
 
-function StatCard({ label, value, icon: Icon, tone }: { label: string; value: number; icon: any; tone: "destructive" | "warning" | "amber" | "ok" }) {
+function StatCard({ label, value, icon: Icon, tone, formatter }: { label: string; value: number; icon: any; tone: "destructive" | "warning" | "amber" | "ok"; formatter?: (v: number) => string }) {
   const colors = {
     destructive: "text-destructive bg-destructive/10",
     warning: "text-orange-600 bg-orange-500/10 dark:text-orange-400",
@@ -186,7 +217,7 @@ function StatCard({ label, value, icon: Icon, tone }: { label: string; value: nu
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        <div className="text-2xl font-semibold tabular-nums">{formatter ? formatter(value) : value}</div>
         <div className="text-xs text-muted-foreground">{label}</div>
       </div>
     </Card>
