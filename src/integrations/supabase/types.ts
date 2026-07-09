@@ -82,6 +82,7 @@ export type Database = {
           returned: number
           store_id: string
           updated_at: string
+          written_off: number
           year: number
         }
         Insert: {
@@ -97,6 +98,7 @@ export type Database = {
           returned?: number
           store_id: string
           updated_at?: string
+          written_off?: number
           year: number
         }
         Update: {
@@ -112,6 +114,7 @@ export type Database = {
           returned?: number
           store_id?: string
           updated_at?: string
+          written_off?: number
           year?: number
         }
         Relationships: [
@@ -131,11 +134,41 @@ export type Database = {
           },
         ]
       }
+      manager_stores: {
+        Row: {
+          created_at: string
+          id: string
+          store_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          store_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          store_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manager_stores_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_types: {
         Row: {
           created_at: string
           id: string
           name: string
+          price: number | null
           shelf_life_days: number
           sort_order: number
         }
@@ -143,6 +176,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          price?: number | null
           shelf_life_days?: number
           sort_order?: number
         }
@@ -150,6 +184,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          price?: number | null
           shelf_life_days?: number
           sort_order?: number
         }
@@ -231,6 +266,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_store: {
+        Args: { _store_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
