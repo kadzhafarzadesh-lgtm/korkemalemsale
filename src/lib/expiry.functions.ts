@@ -44,14 +44,14 @@ export const getExpiryReport = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<ExpirySummary> => {
     const { supabase } = context;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Aqtau" }).format(new Date());
 
     const [storesRes, ptypesRes, entriesRes] = await Promise.all([
       supabase.from("stores").select("id,name,is_active,sort_order").order("sort_order").order("name"),
-      supabase.from("product_types").select("id,name,shelf_life_days,sort_order").order("sort_order").order("name"),
+      supabase.from("product_types").select("id,name,shelf_life_days,sort_order,price").order("sort_order").order("name"),
       supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,opening_balance,posted,returned,actual_balance")
+        .select("store_id,product_type_id,year,month,day,opening_balance,posted,returned,written_off,actual_balance")
         .order("year").order("month").order("day"),
     ]);
 
