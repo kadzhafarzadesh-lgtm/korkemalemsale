@@ -198,3 +198,93 @@ export const writeOffBatch = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true, date: today };
   });
+
+export type StockRow = {
+  store_id: string;
+  store_name: string;
+  counterparty_id: string | null;
+  product_id: string;
+  product_name: string;
+  stock: number;
+  days_since_revision: number | null;
+  next_expiry_date: string | null;
+  days_to_expiry: number | null;
+  low: boolean;
+  overstock: boolean;
+};
+
+export const getStockReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ today: string; rows: StockRow[] }> => {
+    const summary = await (getExpiryReport as any)({});
+    const { supabase } = context;
+    const today = summary.today as string;
+
+    // fetch stores/ptypes for full grid (including items without batches)
+    const [storesRes, ptypesRes, entriesRes] = await Promise.all([
+      supabase.from("stores").select("id,name,counterparty_id,is_active,sort_order").order("sort_order").order("name"),
+      supabase.from("product_types").select("id,name,sort_order").order("sort_order").order("name"),
+      supabase.from("daily_entries")
+        .select("store_id,product_type_id,year,month,day,actual_balance")
+        .not("actual_balance", "is", null)
+        .order("year").order("month").order("day"),
+    ]);
+    const stores = (storesRes.data ?? []).filter((s: any) => s.is_active);
+    const ptypes = (ptypesRes.data ?? []);
+    const entries = (entriesRes.data ?? []) as any[];
+
+    // last revision date per (store, product)
+    const lastRev = new Map<string, string>();
+    for (const e of entries) {
+      const k = `${e.store_id}|${e.product_type_id}`;
+      const d = `${e.year}-${String(e.month).padStart(2,'0')}-${String(e.day).padStart(2,'0')}`;
+      const prev = lastRev.get(k);
+      if (!prev || d > prev) lastRev.set(k, d);
+    }
+
+    // aggregate batches per (store, product)
+    type Agg = { stock: number; next?: string; nextDays?: number };
+    const agg = new Map<string, Agg>();
+    for (const b of summary.batches as any[]) {
+      const k = `${b.store_id}|${b.product_id}`;
+      const a = agg.get(k) ?? { stock: 0 };
+      a.stock += b.qty;
+      if (a.next === undefined || b.days_left < (a.nextDays ?? Infinity)) {
+        a.next = b.expires_at;
+        a.nextDays = b.days_left;
+      }
+      agg.set(k, a);
+    }
+
+    const rows: StockRow[] = [];
+    const diffDays = (a: string, b: string) => {
+      const [ay, am, ad] = a.split("-").map(Number);
+      const [by, bm, bd] = b.split("-").map(Number);
+      return Math.round((Date.UTC(ay, am - 1, ad) - Date.UTC(by, bm - 1, bd)) / 86400000);
+    };
+
+    for (const s of stores as any[]) {
+      for (const p of ptypes as any[]) {
+        const k = `${s.id}|${p.id}`;
+        const a = agg.get(k);
+        const stock = a ? Math.round(a.stock * 100) / 100 : 0;
+        const rev = lastRev.get(k) ?? null;
+        rows.push({
+          store_id: s.id,
+          store_name: s.name,
+          counterparty_id: s.counterparty_id ?? null,
+          product_id: p.id,
+          product_name: p.name,
+          stock,
+          days_since_revision: rev ? diffDays(today, rev) : null,
+          next_expiry_date: a?.next ?? null,
+          days_to_expiry: a?.nextDays ?? null,
+          low: stock > 0 && stock < 5,
+          overstock: stock > 100,
+        });
+      }
+    }
+
+    rows.sort((a, b) => (a.days_to_expiry ?? 9999) - (b.days_to_expiry ?? 9999));
+    return { today, rows };
+  });
