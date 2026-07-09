@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Loader2, AlertTriangle, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { getExpiryReport, type ExpiryBatch } from "@/lib/expiry.functions";
+import { Loader2, AlertTriangle, Clock, CheckCircle2, XCircle, Trash2, Coins } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import { getExpiryReport, writeOffBatch, type ExpiryBatch } from "@/lib/expiry.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/expiry")({
