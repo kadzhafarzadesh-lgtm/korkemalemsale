@@ -126,11 +126,11 @@ function Dashboard() {
 
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
-    queryFn: async () => (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order")).data ?? [],
+    queryFn: async () => (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order").order("name")).data ?? [],
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
-    queryFn: async () => (await supabase.from("product_types").select("id,name").order("sort_order")).data ?? [],
+    queryFn: async () => (await supabase.from("product_types").select("id,name").order("sort_order").order("name")).data ?? [],
   });
 
   const filtered = useMemo(() => {

@@ -30,7 +30,7 @@ function ExpiryPage() {
   const { data: stores = [] } = useQuery({
     queryKey: ["stores"],
     queryFn: async () =>
-      (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order")).data ?? [],
+      (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order").order("name")).data ?? [],
   });
 
   const [storeFilter, setStoreFilter] = useState<string>("all");
