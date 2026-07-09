@@ -7,17 +7,19 @@ export type ExpiryBatch = {
   product_id: string;
   product_name: string;
   shelf_life_days: number;
+  price: number | null;
   received_date: string; // YYYY-MM-DD ("opening" for synthetic)
-  is_synthetic: boolean; // true when batch came from opening_balance (date approx.)
+  is_synthetic: boolean;
   qty: number;
-  expires_at: string; // YYYY-MM-DD
-  days_left: number; // can be negative when expired
+  expires_at: string;
+  days_left: number;
 };
 
 export type ExpirySummary = {
   today: string;
   batches: ExpiryBatch[];
   totals: { expired: number; critical: number; warning: number; ok: number };
+  loss_amount: number; // ₸ по просрочке (сумма qty*price для days_left<0, если price задана)
 };
 
 function toISO(y: number, m: number, d: number) {
