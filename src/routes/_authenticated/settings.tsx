@@ -59,6 +59,7 @@ function UsersTab() {
     queryFn: async () => (await supabase.from("profiles").select("*").order("created_at", { ascending: false })).data ?? [],
   });
   const [open, setOpen] = useState(false);
+  const [assignFor, setAssignFor] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "operator" as "admin" | "operator" | "viewer" });
   const [busy, setBusy] = useState(false);
 
