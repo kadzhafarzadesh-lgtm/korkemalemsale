@@ -257,8 +257,7 @@ function TodayPage() {
             const returned = +(e?.returned ?? 0);
             const writtenOff = +(e?.written_off ?? 0);
             const actual = e?.actual_balance != null ? +e.actual_balance : null;
-            const opening = +(e?.opening_balance ?? 0);
-            const base = opening;
+            const base = baseByKey.get(`${store.id}|${ptype.id}`) ?? 0;
             const realized = actual != null ? base + posted - returned - writtenOff - actual : 0;
             const isEmpty = !(e && (actual != null || posted !== 0 || returned !== 0));
             return (
