@@ -118,6 +118,46 @@ function TodayPage() {
     return m;
   }, [entries]);
 
+  // Compute base (running effective balance at end of previous day) per store×product.
+  const baseByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    // Group history by key
+    const groups = new Map<string, HistEntry[]>();
+    for (const h of history) {
+      const k = `${h.store_id}|${h.product_type_id}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(h);
+    }
+    const cutoff = y * 10000 + mo * 100 + day; // exclude the selected day itself
+    for (const [k, list] of groups) {
+      list.sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day);
+      // opening_balance: prefer first day-1 entry of current month; else first day-1 of prev month
+      const curMonthDay1 = list.find(e => e.year === y && e.month === mo && e.day === 1);
+      const openingCurRaw = curMonthDay1?.opening_balance;
+      const hasOpeningCur = openingCurRaw != null && +openingCurRaw !== 0;
+      const prevY = mo === 1 ? y - 1 : y;
+      const prevM = mo === 1 ? 12 : mo - 1;
+      const prevMonthDay1 = list.find(e => e.year === prevY && e.month === prevM && e.day === 1);
+      const openingPrev = +(prevMonthDay1?.opening_balance ?? 0);
+
+      let eff: number = hasOpeningCur ? +openingCurRaw! : openingPrev;
+      // If current month has an entered opening, we can skip prev month entirely.
+      const startFromCurrent = hasOpeningCur;
+      for (const e of list) {
+        const key = e.year * 10000 + e.month * 100 + e.day;
+        if (startFromCurrent && (e.year !== y || e.month !== mo)) continue;
+        if (key >= cutoff) break;
+        const posted = +e.posted;
+        const returned = +e.returned;
+        const wo = +(e.written_off ?? 0);
+        const manual = e.actual_balance != null ? +e.actual_balance : null;
+        eff = manual != null ? manual : eff + posted - returned - wo;
+      }
+      m.set(k, eff);
+    }
+    return m;
+  }, [history, y, mo, day]);
+
   const rows = useMemo(() => {
     const list: { store: Store; ptype: PType }[] = [];
     for (const s of stores) {
