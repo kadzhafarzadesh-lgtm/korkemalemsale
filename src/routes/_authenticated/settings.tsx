@@ -109,6 +109,9 @@ function UsersTab() {
               <td>{u.role === "admin" ? "Администратор" : u.role === "viewer" ? "Руководитель" : "Оператор"}</td>
               <td><Switch checked={u.is_active} onCheckedChange={async (v) => { try { await setActive({ data: { userId: u.id, isActive: v } }); qc.invalidateQueries({ queryKey: ["users"] }); } catch (e: any) { toast.error(e.message); } }} /></td>
               <td className="text-right">
+                <Button variant="ghost" size="sm" onClick={() => setAssignFor({ id: u.id, name: u.name })} title="Магазины">
+                  <StoreIcon className="w-4 h-4" />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={async () => { if (!confirm("Удалить пользователя?")) return; try { await del({ data: { userId: u.id } }); toast.success("Удалено"); qc.invalidateQueries({ queryKey: ["users"] }); } catch (e: any) { toast.error(e.message); } }}>
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </Button>
@@ -116,6 +119,7 @@ function UsersTab() {
             </tr>))}</tbody>
         </table>
       )}
+      {assignFor && <ManagerStoresDialog userId={assignFor.id} userName={assignFor.name} onClose={() => setAssignFor(null)} />}
     </Card>
   );
 }
