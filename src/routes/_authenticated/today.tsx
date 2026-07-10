@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { CalendarIcon, Loader2, Save, Eye } from "lucide-react";
+import { CalendarIcon, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { todayAqtauParts } from "@/lib/months";
@@ -79,12 +79,31 @@ function TodayPage() {
     },
   });
 
+  // History for computing running base up to (selected day - 1) within the current month,
+  // plus the previous month's carry when day 1 has no explicit opening.
+  type HistEntry = { store_id: string; product_type_id: string; year: number; month: number; day: number; posted: number; returned: number; written_off: number; actual_balance: number | null; opening_balance: number };
+  const { data: history = [] } = useQuery<HistEntry[]>({
+    queryKey: ["today-history", y, mo],
+    queryFn: async () => {
+      const prevY = mo === 1 ? y - 1 : y;
+      const prevM = mo === 1 ? 12 : mo - 1;
+      const { data } = await supabase
+        .from("daily_entries")
+        .select("store_id,product_type_id,year,month,day,posted,returned,written_off,actual_balance,opening_balance")
+        .in("year", [prevY, y])
+        .or(`and(year.eq.${y},month.eq.${mo}),and(year.eq.${prevY},month.eq.${prevM})`)
+        .limit(50000);
+      return (data ?? []) as HistEntry[];
+    },
+  });
+
   // realtime
   useEffect(() => {
     const ch = supabase
       .channel(`today-${y}-${mo}-${day}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_entries", filter: `year=eq.${y}` }, () => {
         qc.invalidateQueries({ queryKey: ["today-entries", y, mo, day] });
+        qc.invalidateQueries({ queryKey: ["today-history", y, mo] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -98,6 +117,46 @@ function TodayPage() {
     for (const e of entries) m.set(`${e.store_id}|${e.product_type_id}`, e);
     return m;
   }, [entries]);
+
+  // Compute base (running effective balance at end of previous day) per store×product.
+  const baseByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    // Group history by key
+    const groups = new Map<string, HistEntry[]>();
+    for (const h of history) {
+      const k = `${h.store_id}|${h.product_type_id}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(h);
+    }
+    const cutoff = y * 10000 + mo * 100 + day; // exclude the selected day itself
+    for (const [k, list] of groups) {
+      list.sort((a, b) => a.year - b.year || a.month - b.month || a.day - b.day);
+      // opening_balance: prefer first day-1 entry of current month; else first day-1 of prev month
+      const curMonthDay1 = list.find(e => e.year === y && e.month === mo && e.day === 1);
+      const openingCurRaw = curMonthDay1?.opening_balance;
+      const hasOpeningCur = openingCurRaw != null && +openingCurRaw !== 0;
+      const prevY = mo === 1 ? y - 1 : y;
+      const prevM = mo === 1 ? 12 : mo - 1;
+      const prevMonthDay1 = list.find(e => e.year === prevY && e.month === prevM && e.day === 1);
+      const openingPrev = +(prevMonthDay1?.opening_balance ?? 0);
+
+      let eff: number = hasOpeningCur ? +openingCurRaw! : openingPrev;
+      // If current month has an entered opening, we can skip prev month entirely.
+      const startFromCurrent = hasOpeningCur;
+      for (const e of list) {
+        const key = e.year * 10000 + e.month * 100 + e.day;
+        if (startFromCurrent && (e.year !== y || e.month !== mo)) continue;
+        if (key >= cutoff) break;
+        const posted = +e.posted;
+        const returned = +e.returned;
+        const wo = +(e.written_off ?? 0);
+        const manual = e.actual_balance != null ? +e.actual_balance : null;
+        eff = manual != null ? manual : eff + posted - returned - wo;
+      }
+      m.set(k, eff);
+    }
+    return m;
+  }, [history, y, mo, day]);
 
   const rows = useMemo(() => {
     const list: { store: Store; ptype: PType }[] = [];
@@ -198,8 +257,7 @@ function TodayPage() {
             const returned = +(e?.returned ?? 0);
             const writtenOff = +(e?.written_off ?? 0);
             const actual = e?.actual_balance != null ? +e.actual_balance : null;
-            const opening = +(e?.opening_balance ?? 0);
-            const base = opening;
+            const base = baseByKey.get(`${store.id}|${ptype.id}`) ?? 0;
             const realized = actual != null ? base + posted - returned - writtenOff - actual : 0;
             const isEmpty = !(e && (actual != null || posted !== 0 || returned !== 0));
             return (

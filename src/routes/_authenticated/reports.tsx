@@ -90,7 +90,7 @@ function ReportsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
+        .select("store_id,product_type_id,year,month,day,posted,returned,written_off,opening_balance,actual_balance")
         .gte("year", startDate.getFullYear())
         .lte("year", endDate.getFullYear())
         .limit(50000);
@@ -99,18 +99,19 @@ function ReportsPage() {
     },
   });
 
-  type Row = { store_id: string; product_type_id: string; posted: number; returned: number; realized: number; opening: number; closing: number };
+  type Row = { store_id: string; product_type_id: string; posted: number; returned: number; written_off: number; realized: number; opening: number; closing: number };
 
   // Обрабатываем каждый календарный день с начала первого выбранного месяца.
   // Это сохраняет корректную базу на середину месяца и переносит остаток между месяцами.
   const filteredSales: Row[] = useMemo(() => {
-    type Day = { posted: number; returned: number; actual_balance: number | null; opening_balance: number };
+    type Day = { posted: number; returned: number; written_off: number; actual_balance: number | null; opening_balance: number };
     const byDate = new Map<string, Day>();
     for (const e of entries) {
       const k = `${e.store_id}|${e.product_type_id}|${e.year}-${e.month}-${e.day}`;
       byDate.set(k, {
         posted: +e.posted,
         returned: +e.returned,
+        written_off: +((e as any).written_off ?? 0),
         actual_balance: e.actual_balance == null ? null : +e.actual_balance,
         opening_balance: +e.opening_balance,
       });
@@ -122,7 +123,7 @@ function ReportsPage() {
       for (const p of fTypes) {
         let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
         let prevEffective = 0;
-        let posted = 0, returned = 0, realized = 0, opening = 0, closing = 0;
+        let posted = 0, returned = 0, writtenOff = 0, realized = 0, opening = 0, closing = 0;
         let firstSelectedDay = true;
         while (cursor <= endDate) {
           const y = cursor.getFullYear();
@@ -130,17 +131,18 @@ function ReportsPage() {
           const day = cursor.getDate();
           const d = byDate.get(`${s.id}|${p.id}|${y}-${mo}-${day}`);
           if (day === 1) {
-            const enteredOpening = +(d?.opening_balance ?? 0);
-            if (enteredOpening !== 0 || cursor.getTime() === new Date(startDate.getFullYear(), startDate.getMonth(), 1).getTime()) {
-              prevEffective = enteredOpening;
+            const enteredOpening = d?.opening_balance;
+            if ((enteredOpening != null && enteredOpening !== 0) || cursor.getTime() === new Date(startDate.getFullYear(), startDate.getMonth(), 1).getTime()) {
+              prevEffective = +(enteredOpening ?? 0);
             }
           }
           const base = prevEffective;
           const dayPosted = d?.posted ?? 0;
           const dayReturned = d?.returned ?? 0;
+          const dayWO = d?.written_off ?? 0;
           const effective = d?.actual_balance != null
             ? d.actual_balance
-            : base + dayPosted - dayReturned;
+            : base + dayPosted - dayReturned - dayWO;
           if (cursor >= startDate) {
             if (firstSelectedDay) {
               opening = base;
@@ -148,13 +150,14 @@ function ReportsPage() {
             }
             posted += dayPosted;
             returned += dayReturned;
-            realized += d?.actual_balance != null ? base + dayPosted - dayReturned - effective : 0;
+            writtenOff += dayWO;
+            realized += d?.actual_balance != null ? base + dayPosted - dayReturned - dayWO - effective : 0;
             closing = effective;
           }
           prevEffective = effective;
           cursor = new Date(y, mo - 1, day + 1);
         }
-        result.push({ store_id: s.id, product_type_id: p.id, posted, returned, realized, opening, closing });
+        result.push({ store_id: s.id, product_type_id: p.id, posted, returned, written_off: writtenOff, realized, opening, closing });
       }
     }
     return result;

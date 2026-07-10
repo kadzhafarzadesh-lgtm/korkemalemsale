@@ -30,6 +30,7 @@ type RawEntry = {
   day: number;
   posted: number;
   returned: number;
+  written_off: number;
   opening_balance: number;
   actual_balance: number | null;
 };
@@ -42,6 +43,7 @@ type Entry = {
   day: number;
   posted: number;
   returned: number;
+  written_off: number;
   realized: number;
 };
 
@@ -80,7 +82,7 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_entries")
-        .select("store_id,product_type_id,year,month,day,posted,returned,opening_balance,actual_balance")
+        .select("store_id,product_type_id,year,month,day,posted,returned,written_off,opening_balance,actual_balance")
         .eq("year", dataYear)
         .limit(50000);
       if (error) throw error;
@@ -88,7 +90,7 @@ function Dashboard() {
     },
   });
 
-  // Реал. = Нач + Пост − Возвр − Факт (с автоподстановкой Факт. = предыдущий).
+  // Реал. = Нач + Пост − Возвр − Списано − Факт (с автоподстановкой Факт. = предыдущий).
   const entries: Entry[] = useMemo(() => {
     const grouped = new Map<string, RawEntry[]>();
     for (const e of rawEntries) {
@@ -104,17 +106,21 @@ function Dashboard() {
       let prevEffective: number = opening;
       for (const d of list) {
         const base = d.day === 1 ? opening : prevEffective;
+        const posted = +d.posted;
+        const returned = +d.returned;
+        const writtenOff = +(d.written_off ?? 0);
         const manual = d.actual_balance == null ? null : +d.actual_balance;
-        const effective = manual != null ? manual : base + (+d.posted) - (+d.returned);
-        const dayRealized = manual != null ? base + (+d.posted) - (+d.returned) - manual : 0;
+        const effective = manual != null ? manual : base + posted - returned - writtenOff;
+        const dayRealized = manual != null ? base + posted - returned - writtenOff - manual : 0;
         out.push({
           store_id,
           product_type_id,
           year: d.year,
           month: Number(monthStr),
           day: d.day,
-          posted: +d.posted,
-          returned: +d.returned,
+          posted,
+          returned,
+          written_off: writtenOff,
           realized: dayRealized,
         });
         prevEffective = effective;
