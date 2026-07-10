@@ -245,20 +245,38 @@ function CounterpartiesTab() {
 
 function PTypesTab() {
   const qc = useQueryClient();
-  const { data: ptypes = [] } = useQuery({ queryKey: ["all-ptypes"], queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order")).data ?? [] });
+  const { data: ptypes = [] } = useQuery({ queryKey: ["all-ptypes"], queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order").order("name")).data ?? [] });
   const [name, setName] = useState("");
   const [shelf, setShelf] = useState("");
+  const [price, setPrice] = useState("");
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault(); if (!name.trim()) return;
     const maxOrder = Math.max(0, ...ptypes.map((p: any) => p.sort_order));
-    const { error } = await supabase.from("product_types").insert({ name: name.trim(), sort_order: maxOrder + 1, shelf_life_days: Math.max(0, Math.min(3650, parseInt(shelf) || 0)) });
+    const priceVal = price.trim() === "" ? null : Number(price.replace(",", "."));
+    const { error } = await supabase.from("product_types").insert({
+      name: name.trim(),
+      sort_order: maxOrder + 1,
+      shelf_life_days: Math.max(0, Math.min(3650, parseInt(shelf) || 0)),
+      price: priceVal != null && Number.isFinite(priceVal) ? priceVal : null,
+    } as any);
     if (error) return toast.error(error.message);
-    setName(""); setShelf(""); toast.success("Добавлено"); qc.invalidateQueries({ queryKey: ["all-ptypes"] }); qc.invalidateQueries({ queryKey: ["ptypes"] });
+    setName(""); setShelf(""); setPrice("");
+    toast.success("Добавлено");
+    qc.invalidateQueries({ queryKey: ["all-ptypes"] }); qc.invalidateQueries({ queryKey: ["ptypes"] });
   };
   const updateShelf = async (id: string, days: number) => {
     const v = Math.max(0, Math.min(3650, Math.floor(days) || 0));
     const { error } = await supabase.from("product_types").update({ shelf_life_days: v }).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["all-ptypes"] });
+    qc.invalidateQueries({ queryKey: ["expiry-report"] });
+  };
+  const updatePrice = async (id: string, raw: string) => {
+    const trimmed = raw.trim();
+    const val = trimmed === "" ? null : Number(trimmed.replace(",", "."));
+    if (val != null && !Number.isFinite(val)) return;
+    const { error } = await supabase.from("product_types").update({ price: val } as any).eq("id", id);
     if (error) return toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["all-ptypes"] });
     qc.invalidateQueries({ queryKey: ["expiry-report"] });
@@ -273,14 +291,15 @@ function PTypesTab() {
   return (
     <Card className="p-4 space-y-3">
       <h3 className="font-medium">Типы продукции</h3>
-      <p className="text-xs text-muted-foreground">Срок годности (в днях) используется для мониторинга партий. 0 — не отслеживать.</p>
+      <p className="text-xs text-muted-foreground">Срок годности (в днях) — для мониторинга партий, 0 = не отслеживать. Цена (₸) — для расчёта потерь по просрочке.</p>
       <form onSubmit={add} className="flex gap-2 flex-wrap">
         <Input placeholder="Например: сер." value={name} onChange={e => setName(e.target.value)} className="flex-1 min-w-40" />
         <Input type="number" min={0} max={3650} placeholder="Срок, дней" value={shelf} onChange={e => setShelf(e.target.value)} className="w-32" />
+        <Input type="text" inputMode="decimal" placeholder="Цена, ₸" value={price} onChange={e => setPrice(e.target.value)} className="w-32" />
         <Button type="submit"><Plus className="w-4 h-4 mr-1" />Добавить</Button>
       </form>
       <table className="w-full text-sm">
-        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th className="w-40">Срок (дней)</th><th></th></tr></thead>
+        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th className="w-32">Срок (дней)</th><th className="w-32">Цена, ₸</th><th></th></tr></thead>
         <tbody>{ptypes.map((p: any) => (
           <tr key={p.id} className="border-t">
             <td className="py-2">{p.name}</td>
@@ -297,9 +316,78 @@ function PTypesTab() {
                 className="h-8 w-24"
               />
             </td>
+            <td>
+              <Input
+                type="text"
+                inputMode="decimal"
+                defaultValue={p.price ?? ""}
+                onBlur={(e) => {
+                  const cur = p.price == null ? "" : String(p.price);
+                  if (e.target.value.trim() !== cur) updatePrice(p.id, e.target.value);
+                }}
+                className="h-8 w-28 tabular-nums"
+              />
+            </td>
             <td className="text-right"><Button variant="ghost" size="sm" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
           </tr>))}</tbody>
       </table>
     </Card>
+  );
+}
+
+function ManagerStoresDialog({ userId, userName, onClose }: { userId: string; userName: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data: stores = [] } = useQuery({
+    queryKey: ["all-stores-for-assign"],
+    queryFn: async () => (await supabase.from("stores").select("id,name").eq("is_active", true).order("sort_order").order("name")).data ?? [],
+  });
+  const { data: assigned = [] } = useQuery({
+    queryKey: ["manager-stores", userId],
+    queryFn: async () => (await supabase.from("manager_stores").select("store_id").eq("user_id", userId)).data ?? [],
+  });
+  const assignedSet = new Set(assigned.map((a: any) => a.store_id));
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const toggle = async (storeId: string, checked: boolean) => {
+    setBusy(storeId);
+    try {
+      if (checked) {
+        const { error } = await supabase.from("manager_stores").insert({ user_id: userId, store_id: storeId } as any);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("manager_stores").delete().eq("user_id", userId).eq("store_id", storeId);
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["manager-stores", userId] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Магазины пользователя · {userName}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Если ничего не выбрано — пользователь видит все магазины. Отметьте магазины, чтобы ограничить доступ.
+        </p>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {stores.map((s: any) => (
+            <label key={s.id} className="flex items-center justify-between border rounded-md p-2">
+              <span className="text-sm">{s.name}</span>
+              <Switch
+                checked={assignedSet.has(s.id)}
+                disabled={busy === s.id}
+                onCheckedChange={(v) => toggle(s.id, v)}
+              />
+            </label>
+          ))}
+          {stores.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">Нет активных магазинов</div>}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>Закрыть</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
