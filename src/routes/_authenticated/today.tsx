@@ -79,12 +79,31 @@ function TodayPage() {
     },
   });
 
+  // History for computing running base up to (selected day - 1) within the current month,
+  // plus the previous month's carry when day 1 has no explicit opening.
+  type HistEntry = { store_id: string; product_type_id: string; year: number; month: number; day: number; posted: number; returned: number; written_off: number; actual_balance: number | null; opening_balance: number };
+  const { data: history = [] } = useQuery<HistEntry[]>({
+    queryKey: ["today-history", y, mo],
+    queryFn: async () => {
+      const prevY = mo === 1 ? y - 1 : y;
+      const prevM = mo === 1 ? 12 : mo - 1;
+      const { data } = await supabase
+        .from("daily_entries")
+        .select("store_id,product_type_id,year,month,day,posted,returned,written_off,actual_balance,opening_balance")
+        .in("year", [prevY, y])
+        .or(`and(year.eq.${y},month.eq.${mo}),and(year.eq.${prevY},month.eq.${prevM})`)
+        .limit(50000);
+      return (data ?? []) as HistEntry[];
+    },
+  });
+
   // realtime
   useEffect(() => {
     const ch = supabase
       .channel(`today-${y}-${mo}-${day}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_entries", filter: `year=eq.${y}` }, () => {
         qc.invalidateQueries({ queryKey: ["today-entries", y, mo, day] });
+        qc.invalidateQueries({ queryKey: ["today-history", y, mo] });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
