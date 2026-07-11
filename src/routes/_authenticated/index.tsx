@@ -176,7 +176,7 @@ function Dashboard() {
   const byType = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of filtered) m.set(e.product_type_id, (m.get(e.product_type_id) ?? 0) + +e.realized);
-    return ptypes.map(p => ({ name: p.name, value: m.get(p.id) ?? 0 }));
+    return ptypes.map((p: any) => ({ name: p.name, color: p.color as string | null, value: m.get(p.id) ?? 0 }));
   }, [filtered, ptypes]);
 
   const topStores = useMemo(() => {
