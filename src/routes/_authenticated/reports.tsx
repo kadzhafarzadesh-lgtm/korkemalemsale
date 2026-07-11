@@ -83,7 +83,7 @@ function ReportsPage() {
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
-    queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("product_types").select("id,name,color,sort_order,shelf_life_days,price").order("sort_order").order("name")).data ?? [],
   });
 
   const { data: entries = [] } = useQuery({
