@@ -736,11 +736,22 @@ function MobileTable({
                 const c = getComp(row.store.id, row.ptype.id, d);
                 const isNeg = c?.realized != null && c.realized < 0;
                 const realText = c?.isAuto ? "text-[#9ca3af]" : isNeg ? "text-destructive" : "text-foreground";
+                const accent = productAccentColor(row.ptype.color);
+                const groupTop = row.isFirstOfStore && idx > 0;
                 return (
-                  <tr key={`${row.store.id}|${row.ptype.id}`} className="border-t">
+                  <tr key={`${row.store.id}|${row.ptype.id}`} className={cn("border-t", groupTop && "border-t-2 border-t-sidebar/60")}>
                     <td className="px-2 py-1 text-muted-foreground text-xs">{idx + 1}</td>
-                    <td className="px-2 py-1 text-xs leading-tight">{truncate(row.store.name, 22)}</td>
-                    <td className="px-2 py-1 text-xs">{row.ptype.name}</td>
+                    <td className="px-2 py-1 text-xs leading-tight">
+                      {row.isFirstOfStore
+                        ? <span className="font-semibold">{truncate(row.store.name, 22)}</span>
+                        : <span className="text-muted-foreground/40">↳</span>}
+                    </td>
+                    <td className="px-2 py-1 text-xs" style={{ boxShadow: `inset 3px 0 0 0 ${accent}` }}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full" style={productDotStyle(row.ptype.color)} aria-hidden />
+                        {row.ptype.name}
+                      </span>
+                    </td>
                     <td className="p-0">
                       <Cell
                         value={d === 1 ? (c1?.base ?? 0) : (c?.base ?? null)}
