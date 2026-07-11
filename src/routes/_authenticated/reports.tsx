@@ -344,7 +344,13 @@ function ReportsPage() {
                 <th className="py-1">Тип</th><th className="text-right">Пост.</th><th className="text-right">Возвр.</th><th className="text-right">Реал.</th><th className="text-right">% возвр.</th>
               </tr></thead>
               <tbody>{typeSummary.map(t => (
-                <tr key={t.name} className="border-t"><td className="py-1.5">{t.name}</td>
+                <tr key={t.id} className="border-t" style={productRowStyle(t.color)}>
+                  <td className="py-1.5">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(t.color)} aria-hidden />
+                      {t.name}
+                    </span>
+                  </td>
                   <td className="text-right num">{fmt(t.posted)}</td><td className="text-right num">{fmt(t.returned)}</td>
                   <td className="text-right num">{fmt(t.realized)}</td><td className="text-right num">{t.retPct.toFixed(1)}%</td>
                 </tr>))}</tbody>
