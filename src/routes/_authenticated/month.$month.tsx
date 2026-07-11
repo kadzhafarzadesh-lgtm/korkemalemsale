@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { productDotStyle, productAccentColor } from "@/lib/product-colors";
 
 export const Route = createFileRoute("/_authenticated/month/$month")({
   component: MonthPage,
