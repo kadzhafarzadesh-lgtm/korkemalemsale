@@ -136,7 +136,7 @@ function Dashboard() {
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
-    queryFn: async () => (await supabase.from("product_types").select("id,name").order("sort_order").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("product_types").select("id,name,color").order("sort_order").order("name")).data ?? [],
   });
 
   const filtered = useMemo(() => {
@@ -176,7 +176,7 @@ function Dashboard() {
   const byType = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of filtered) m.set(e.product_type_id, (m.get(e.product_type_id) ?? 0) + +e.realized);
-    return ptypes.map(p => ({ name: p.name, value: m.get(p.id) ?? 0 }));
+    return ptypes.map((p: any) => ({ name: p.name, color: p.color as string | null, value: m.get(p.id) ?? 0 }));
   }, [filtered, ptypes]);
 
   const topStores = useMemo(() => {
@@ -196,7 +196,6 @@ function Dashboard() {
 
 
   const COLORS = ["hsl(200 60% 45%)", "hsl(150 50% 45%)", "hsl(250 50% 50%)", "hsl(25 70% 55%)", "hsl(280 50% 55%)"];
-  const TYPE_COLORS: Record<string, string> = { "сер.": "#3b82f6", "вар.": "#f97316" };
   const byTypeTotal = byType.reduce((s, t) => s + t.value, 0);
 
   return (
@@ -303,7 +302,7 @@ function Dashboard() {
                         label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                       >
                         {byType.map((t, i) => (
-                          <Cell key={i} fill={TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length]} />
+                          <Cell key={i} fill={t.color ?? COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(v: any) => fmt(Number(v))} />

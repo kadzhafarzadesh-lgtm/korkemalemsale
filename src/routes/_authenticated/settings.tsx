@@ -15,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Loader2, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createUser, deleteUser, setUserActive } from "@/lib/admin-users.functions";
+import { PRODUCT_COLOR_PALETTE, normalizeProductColor } from "@/lib/product-colors";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -286,6 +288,12 @@ function PTypesTab() {
     qc.invalidateQueries({ queryKey: ["all-ptypes"] });
     qc.invalidateQueries({ queryKey: ["expiry-report"] });
   };
+  const updateColor = async (id: string, hex: string | null) => {
+    const { error } = await supabase.from("product_types").update({ color: hex } as any).eq("id", id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["all-ptypes"] });
+    qc.invalidateQueries({ queryKey: ["ptypes"] });
+  };
   const remove = async (id: string) => {
     if (!confirm("Удалить тип? Связанные данные тоже удалятся.")) return;
     const { error } = await supabase.from("product_types").delete().eq("id", id);
@@ -296,18 +304,28 @@ function PTypesTab() {
   return (
     <Card className="p-4 space-y-3">
       <h3 className="font-medium">Типы продукции</h3>
-      <p className="text-xs text-muted-foreground">Срок годности (в днях) — для мониторинга партий, 0 = не отслеживать. Цена (₸) — для расчёта потерь по просрочке.</p>
+      <p className="text-xs text-muted-foreground">Срок годности (в днях) — для мониторинга партий, 0 = не отслеживать. Цена (₸) — для расчёта потерь по просрочке. Цвет — визуальная метка во всех разделах.</p>
       <form onSubmit={add} className="flex gap-2 flex-wrap">
         <Input placeholder="Например: сер." value={name} onChange={e => setName(e.target.value)} className="flex-1 min-w-40" />
         <Input type="number" min={0} max={3650} placeholder="Срок, дней" value={shelf} onChange={e => setShelf(e.target.value)} className="w-32" />
         <Input type="text" inputMode="decimal" placeholder="Цена, ₸" value={price} onChange={e => setPrice(e.target.value)} className="w-32" />
         <Button type="submit"><Plus className="w-4 h-4 mr-1" />Добавить</Button>
       </form>
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th className="w-32">Срок (дней)</th><th className="w-32">Цена, ₸</th><th></th></tr></thead>
+        <thead className="text-muted-foreground text-left"><tr><th className="py-2">Название</th><th className="w-32">Срок (дней)</th><th className="w-32">Цена, ₸</th><th className="min-w-[220px]">Цвет</th><th></th></tr></thead>
         <tbody>{ptypes.map((p: any) => (
           <tr key={p.id} className="border-t">
-            <td className="py-2">{p.name}</td>
+            <td className="py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: normalizeProductColor(p.color) }}
+                  aria-hidden
+                />
+                {p.name}
+              </div>
+            </td>
             <td>
               <Input
                 type="number"
@@ -333,9 +351,40 @@ function PTypesTab() {
                 className="h-8 w-28 tabular-nums"
               />
             </td>
+            <td>
+              <div className="flex flex-wrap gap-1.5 py-1">
+                {PRODUCT_COLOR_PALETTE.map((c) => {
+                  const active = (p.color ?? "").toLowerCase() === c.hex;
+                  return (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      title={c.label}
+                      onClick={() => updateColor(p.id, active ? null : c.hex)}
+                      className={cn(
+                        "w-6 h-6 rounded-full border transition-transform active:scale-90",
+                        active ? "ring-2 ring-offset-1 ring-foreground scale-110" : "border-border hover:scale-110",
+                      )}
+                      style={{ backgroundColor: c.hex }}
+                      aria-label={c.label}
+                    />
+                  );
+                })}
+                {p.color && (
+                  <button
+                    type="button"
+                    onClick={() => updateColor(p.id, null)}
+                    className="text-[11px] text-muted-foreground underline ml-1 self-center"
+                  >
+                    сбросить
+                  </button>
+                )}
+              </div>
+            </td>
             <td className="text-right"><Button variant="ghost" size="sm" onClick={() => remove(p.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
           </tr>))}</tbody>
       </table>
+      </div>
     </Card>
   );
 }

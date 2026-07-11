@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 
 export const Route = createFileRoute("/_authenticated/today")({
   component: TodayPage,
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/today")({
 });
 
 type Store = { id: string; name: string; counterparty_id: string | null };
-type PType = { id: string; name: string };
+type PType = { id: string; name: string; color: string | null };
 type Entry = {
   store_id: string;
   product_type_id: string;
@@ -65,7 +66,7 @@ function TodayPage() {
   const { data: ptypes = [] } = useQuery<PType[]>({
     queryKey: ["ptypes"],
     queryFn: async () =>
-      (await supabase.from("product_types").select("id,name").order("sort_order").order("name")).data ?? [],
+      ((await supabase.from("product_types").select("id,name,color").order("sort_order").order("name")).data ?? []) as PType[],
   });
 
   const { data: entries = [] } = useQuery<Entry[]>({
@@ -247,43 +248,61 @@ function TodayPage() {
           </Badge>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-4">
           {rows.length === 0 && (
             <div className="py-8 text-center text-muted-foreground text-sm">Нет строк для отображения</div>
           )}
-          {rows.map(({ store, ptype }) => {
-            const e = byKey.get(`${store.id}|${ptype.id}`);
-            const posted = +(e?.posted ?? 0);
-            const returned = +(e?.returned ?? 0);
-            const writtenOff = +(e?.written_off ?? 0);
-            const actual = e?.actual_balance != null ? +e.actual_balance : null;
-            const base = baseByKey.get(`${store.id}|${ptype.id}`) ?? 0;
-            const realized = actual != null ? base + posted - returned - writtenOff - actual : 0;
-            const isEmpty = !(e && (actual != null || posted !== 0 || returned !== 0));
-            return (
-              <div
-                key={`${store.id}|${ptype.id}`}
-                className={cn(
-                  "grid grid-cols-12 gap-2 items-center rounded-md border p-2 text-sm",
-                  isEmpty && "bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-800/40",
-                )}
-              >
-                <div className="col-span-12 md:col-span-4 min-w-0">
-                  <div className="font-medium truncate">{store.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{ptype.name}</div>
+          {(() => {
+            const groups = new Map<string, { store: Store; items: PType[] }>();
+            for (const { store, ptype } of rows) {
+              if (!groups.has(store.id)) groups.set(store.id, { store, items: [] });
+              groups.get(store.id)!.items.push(ptype);
+            }
+            return Array.from(groups.values()).map(({ store, items }) => (
+              <div key={store.id} className="rounded-lg border bg-card overflow-hidden">
+                <div className="px-3 py-2 bg-muted/60 border-b flex items-center justify-between gap-2">
+                  <div className="font-semibold truncate">{store.name}</div>
+                  <div className="text-xs text-muted-foreground shrink-0">{items.length} прод.</div>
                 </div>
-                <NumField label="Пост." value={posted} readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "posted", v)} />
-                <NumField label="Возвр." value={returned} readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "returned", v)} />
-                <NumField label="Факт." value={actual} nullable readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "actual_balance", v)} />
-                <div className="col-span-4 md:col-span-2 text-right">
-                  <div className="text-xs text-muted-foreground">Реал.</div>
-                  <div className={cn("font-medium tabular-nums", actual == null && "text-muted-foreground")}>
-                    {actual == null ? "—" : realized}
-                  </div>
+                <div className="divide-y">
+                  {items.map((ptype) => {
+                    const e = byKey.get(`${store.id}|${ptype.id}`);
+                    const posted = +(e?.posted ?? 0);
+                    const returned = +(e?.returned ?? 0);
+                    const writtenOff = +(e?.written_off ?? 0);
+                    const actual = e?.actual_balance != null ? +e.actual_balance : null;
+                    const base = baseByKey.get(`${store.id}|${ptype.id}`) ?? 0;
+                    const realized = actual != null ? base + posted - returned - writtenOff - actual : 0;
+                    return (
+                      <div
+                        key={ptype.id}
+                        style={productRowStyle(ptype.color)}
+                        className="grid grid-cols-12 gap-2 items-center p-2 text-sm"
+                      >
+                        <div className="col-span-12 md:col-span-4 min-w-0 flex items-center gap-2">
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                            style={productDotStyle(ptype.color)}
+                            aria-hidden
+                          />
+                          <span className="font-medium truncate">{ptype.name}</span>
+                        </div>
+                        <NumField label="Пост." value={posted} readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "posted", v)} />
+                        <NumField label="Возвр." value={returned} readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "returned", v)} />
+                        <NumField label="Факт." value={actual} nullable readOnly={readOnly} onSave={(v) => saveField(store.id, ptype.id, "actual_balance", v)} />
+                        <div className="col-span-4 md:col-span-2 text-right">
+                          <div className="text-xs text-muted-foreground">Реал.</div>
+                          <div className={cn("font-medium tabular-nums", actual == null && "text-muted-foreground")}>
+                            {actual == null ? "—" : realized}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
+            ));
+          })()}
         </div>
       </Card>
     </div>

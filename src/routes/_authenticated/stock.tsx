@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Package, AlertTriangle, TrendingUp } from "lucide-react";
 import { getExpiryReport } from "@/lib/expiry.functions";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/stock")({
@@ -35,6 +36,16 @@ function StockPage() {
     queryFn: async () =>
       (await supabase.from("counterparties").select("id,name").order("sort_order").order("name")).data ?? [],
   });
+  const { data: ptypesColors = [] } = useQuery({
+    queryKey: ["ptypes"],
+    queryFn: async () =>
+      (await supabase.from("product_types").select("id,color").order("sort_order").order("name")).data ?? [],
+  });
+  const colorByPtype = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const p of ptypesColors as any[]) m.set(p.id, p.color ?? null);
+    return m;
+  }, [ptypesColors]);
   const { data: lastRevs = [] } = useQuery({
     queryKey: ["last-revisions"],
     queryFn: async () =>
@@ -182,10 +193,17 @@ function StockPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={`${r.store_id}|${r.product_id}`} className="border-t">
+                {rows.map((r) => {
+                  const color = colorByPtype.get(r.product_id) ?? null;
+                  return (
+                  <tr key={`${r.store_id}|${r.product_id}`} className="border-t" style={productRowStyle(color)}>
                     <td className="py-2 px-2">{r.store_name}</td>
-                    <td className="px-2">{r.product_name}</td>
+                    <td className="px-2">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(color)} aria-hidden />
+                        {r.product_name}
+                      </span>
+                    </td>
                     <td className="px-2 text-right tabular-nums font-medium">{r.stock}</td>
                     <td className="px-2 text-right tabular-nums text-muted-foreground">
                       {r.days_since_revision == null ? "—" : `${r.days_since_revision} дн.`}
@@ -201,7 +219,8 @@ function StockPage() {
                       {r.overstock && <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-700 border-amber-500/30">затоварив.</Badge>}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

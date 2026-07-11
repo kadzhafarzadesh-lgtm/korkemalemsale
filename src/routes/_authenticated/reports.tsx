@@ -13,6 +13,7 @@ import { CalendarIcon, Download } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import * as XLSX from "xlsx";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
@@ -82,7 +83,7 @@ function ReportsPage() {
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
-    queryFn: async () => (await supabase.from("product_types").select("*").order("sort_order").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("product_types").select("id,name,color,sort_order,shelf_life_days,price").order("sort_order").order("name")).data ?? [],
   });
 
   const { data: entries = [] } = useQuery({
@@ -165,7 +166,8 @@ function ReportsPage() {
 
 
   const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? "—";
-  const ptName = (id: string) => ptypes.find(p => p.id === id)?.name ?? "—";
+  const ptName = (id: string) => ptypes.find((p: any) => p.id === id)?.name ?? "—";
+  const ptColor = (id: string): string | null => ((ptypes.find((p: any) => p.id === id) as any)?.color ?? null);
 
   const totals = useMemo(() => filteredSales.reduce((a, r) => ({
     posted: a.posted + r.posted, returned: a.returned + r.returned, realized: a.realized + r.realized,
@@ -179,7 +181,7 @@ function ReportsPage() {
       m2.set(r.product_type_id, cur);
     }
     return Array.from(m2.entries()).map(([id, v]) => ({
-      name: ptName(id), ...v, retPct: v.posted > 0 ? (v.returned / v.posted) * 100 : 0,
+      id, name: ptName(id), color: ptColor(id), ...v, retPct: v.posted > 0 ? (v.returned / v.posted) * 100 : 0,
     }));
   }, [filteredSales]);
 
@@ -311,8 +313,14 @@ function ReportsPage() {
               </tr></thead>
               <tbody>
                 {filteredSales.map((r, i) => (
-                  <tr key={i} className="border-t hover:bg-muted/30">
-                    <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td>
+                  <tr key={i} className="border-t hover:bg-muted/30" style={productRowStyle(ptColor(r.product_type_id))}>
+                    <td className="px-3 py-1.5">{storeName(r.store_id)}</td>
+                    <td>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(ptColor(r.product_type_id))} aria-hidden />
+                        {ptName(r.product_type_id)}
+                      </span>
+                    </td>
                     <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
                     <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                     <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
@@ -336,7 +344,13 @@ function ReportsPage() {
                 <th className="py-1">Тип</th><th className="text-right">Пост.</th><th className="text-right">Возвр.</th><th className="text-right">Реал.</th><th className="text-right">% возвр.</th>
               </tr></thead>
               <tbody>{typeSummary.map(t => (
-                <tr key={t.name} className="border-t"><td className="py-1.5">{t.name}</td>
+                <tr key={t.id} className="border-t" style={productRowStyle(t.color)}>
+                  <td className="py-1.5">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(t.color)} aria-hidden />
+                      {t.name}
+                    </span>
+                  </td>
                   <td className="text-right num">{fmt(t.posted)}</td><td className="text-right num">{fmt(t.returned)}</td>
                   <td className="text-right num">{fmt(t.realized)}</td><td className="text-right num">{t.retPct.toFixed(1)}%</td>
                 </tr>))}</tbody>
@@ -373,8 +387,15 @@ function ReportsPage() {
                 <th className="text-right">Нач. ост.</th><th className="text-right pr-3">Кон. ост.</th>
               </tr></thead>
               <tbody>{filteredSales.map((r, i) => (
-                <tr key={i} className="border-t hover:bg-muted/30">
-                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td><td>{periodLabel}</td>
+                <tr key={i} className="border-t hover:bg-muted/30" style={productRowStyle(ptColor(r.product_type_id))}>
+                  <td className="px-3 py-1.5">{storeName(r.store_id)}</td>
+                  <td>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(ptColor(r.product_type_id))} aria-hidden />
+                      {ptName(r.product_type_id)}
+                    </span>
+                  </td>
+                  <td>{periodLabel}</td>
                   <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
                   <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                   <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
