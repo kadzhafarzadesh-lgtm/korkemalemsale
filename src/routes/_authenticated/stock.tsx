@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Package, AlertTriangle, TrendingUp } from "lucide-react";
 import { getExpiryReport } from "@/lib/expiry.functions";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/stock")({
