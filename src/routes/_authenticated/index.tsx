@@ -196,7 +196,6 @@ function Dashboard() {
 
 
   const COLORS = ["hsl(200 60% 45%)", "hsl(150 50% 45%)", "hsl(250 50% 50%)", "hsl(25 70% 55%)", "hsl(280 50% 55%)"];
-  const TYPE_COLORS: Record<string, string> = { "сер.": "#3b82f6", "вар.": "#f97316" };
   const byTypeTotal = byType.reduce((s, t) => s + t.value, 0);
 
   return (
