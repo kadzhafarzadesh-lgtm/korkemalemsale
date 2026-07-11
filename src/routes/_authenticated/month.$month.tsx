@@ -432,7 +432,7 @@ function MonthPage() {
 }
 
 type TableProps = {
-  rows: { store: Store; ptype: PType }[];
+  rows: { store: Store; ptype: PType; isFirstOfStore: boolean; storeSize: number }[];
   days: number;
   getDay: (s: string, p: string, d: number) => Entry | undefined;
   getComp: (s: string, p: string, d: number) => any;
