@@ -165,6 +165,7 @@ export type Database = {
       }
       product_types: {
         Row: {
+          color: string | null
           created_at: string
           id: string
           name: string
@@ -173,6 +174,7 @@ export type Database = {
           sort_order: number
         }
         Insert: {
+          color?: string | null
           created_at?: string
           id?: string
           name: string
@@ -181,6 +183,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          color?: string | null
           created_at?: string
           id?: string
           name?: string

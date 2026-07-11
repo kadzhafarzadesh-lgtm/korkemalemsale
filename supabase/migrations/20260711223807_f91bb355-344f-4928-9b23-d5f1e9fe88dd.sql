@@ -1,0 +1,1 @@
+ALTER TABLE public.product_types ADD COLUMN IF NOT EXISTS color TEXT;
