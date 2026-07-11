@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/today")({
 });
 
 type Store = { id: string; name: string; counterparty_id: string | null };
-type PType = { id: string; name: string };
+type PType = { id: string; name: string; color: string | null };
 type Entry = {
   store_id: string;
   product_type_id: string;
