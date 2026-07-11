@@ -66,7 +66,7 @@ function TodayPage() {
   const { data: ptypes = [] } = useQuery<PType[]>({
     queryKey: ["ptypes"],
     queryFn: async () =>
-      (await supabase.from("product_types").select("id,name").order("sort_order").order("name")).data ?? [],
+      ((await supabase.from("product_types").select("id,name,color").order("sort_order").order("name")).data ?? []) as PType[],
   });
 
   const { data: entries = [] } = useQuery<Entry[]>({
