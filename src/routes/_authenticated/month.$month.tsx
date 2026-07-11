@@ -80,7 +80,7 @@ function MonthPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("product_types")
-        .select("id,name,sort_order")
+        .select("id,name,color,sort_order")
         .order("sort_order")
         .order("name");
       if (error) throw error;
