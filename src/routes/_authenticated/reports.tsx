@@ -181,7 +181,7 @@ function ReportsPage() {
       m2.set(r.product_type_id, cur);
     }
     return Array.from(m2.entries()).map(([id, v]) => ({
-      name: ptName(id), ...v, retPct: v.posted > 0 ? (v.returned / v.posted) * 100 : 0,
+      id, name: ptName(id), color: ptColor(id), ...v, retPct: v.posted > 0 ? (v.returned / v.posted) * 100 : 0,
     }));
   }, [filteredSales]);
 
