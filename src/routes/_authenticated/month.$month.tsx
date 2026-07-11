@@ -197,10 +197,12 @@ function MonthPage() {
   }, [entries]);
 
   const rows = useMemo(() => {
-    const r: { store: Store; ptype: PType }[] = [];
+    const r: { store: Store; ptype: PType; isFirstOfStore: boolean; storeSize: number }[] = [];
     for (const s of visibleStores) {
       if (filterStore !== "all" && s.id !== filterStore) continue;
-      for (const p of visiblePtypes) r.push({ store: s, ptype: p });
+      visiblePtypes.forEach((p, i) => {
+        r.push({ store: s, ptype: p, isFirstOfStore: i === 0, storeSize: visiblePtypes.length });
+      });
     }
     return r;
   }, [visibleStores, visiblePtypes, filterStore]);
