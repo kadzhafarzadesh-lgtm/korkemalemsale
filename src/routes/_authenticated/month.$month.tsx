@@ -596,12 +596,24 @@ function DesktopTable({
               const c1 = getComp(row.store.id, row.ptype.id, 1);
               const openingAuto = c1?.openingAuto;
               const openingShown = c1?.base ?? 0;
+              const accent = productAccentColor(row.ptype.color);
+              const groupTop = row.isFirstOfStore && idx > 0;
               return (
                 <tr key={`${row.store.id}|${row.ptype.id}`} className="hover:bg-muted/30">
-                  <td style={{ left: L.num, width: COL_W.num }} className={cn("sticky z-20 px-2 py-1 border-r border-b text-muted-foreground", STICKY_BG)}>{idx + 1}</td>
-                  <td style={{ left: L.store, minWidth: COL_W.store }} className={cn("sticky z-20 px-2 py-1 border-r border-b whitespace-nowrap", STICKY_BG)}>{row.store.name}</td>
-                  <td style={{ left: L.ptype, width: COL_W.ptype }} className={cn("sticky z-20 px-2 py-1 border-r border-b", STICKY_BG)}>{row.ptype.name}</td>
-                  <td style={{ left: L.opening, width: COL_W.opening }} className={cn("sticky z-20 border-r border-b p-0", STICKY_BG, RIGHT_SHADOW)}>
+                  <td style={{ left: L.num, width: COL_W.num }} className={cn("sticky z-20 px-2 py-1 border-r border-b text-muted-foreground", STICKY_BG, groupTop && "border-t-2 border-t-sidebar/60")}>{idx + 1}</td>
+                  <td style={{ left: L.store, minWidth: COL_W.store }} className={cn("sticky z-20 px-2 py-1 border-r border-b whitespace-nowrap", STICKY_BG, groupTop && "border-t-2 border-t-sidebar/60")}>
+                    {row.isFirstOfStore ? <span className="font-semibold">{row.store.name}</span> : <span className="text-muted-foreground/40">↳</span>}
+                  </td>
+                  <td
+                    style={{ left: L.ptype, width: COL_W.ptype, boxShadow: `inset 3px 0 0 0 ${accent}` }}
+                    className={cn("sticky z-20 px-2 py-1 border-r border-b", STICKY_BG, groupTop && "border-t-2 border-t-sidebar/60")}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full" style={productDotStyle(row.ptype.color)} aria-hidden />
+                      {row.ptype.name}
+                    </span>
+                  </td>
+                  <td style={{ left: L.opening, width: COL_W.opening }} className={cn("sticky z-20 border-r border-b p-0", STICKY_BG, RIGHT_SHADOW, groupTop && "border-t-2 border-t-sidebar/60")}>
                     <Cell
                       value={openingShown}
                       autoHint={openingAuto}
@@ -615,15 +627,16 @@ function DesktopTable({
                     const isToday = isCurrentMonth && d === currentDay;
                     const tdBg = isToday ? "bg-[#f0f4ff]" : "";
                     const realText = c?.isAuto ? "text-[#9ca3af]" : isNeg ? "text-destructive" : "text-foreground";
+                    const groupTopCls = groupTop ? "border-t-2 border-t-sidebar/60" : "";
                     return (
                       <Fragment key={d}>
-                        <td className={cn("p-0 border-b", tdBg)}>
+                        <td className={cn("p-0 border-b", tdBg, groupTopCls)}>
                           <Cell value={c?.posted ?? 0} readOnly={readOnly} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "posted", v ?? 0)} />
                         </td>
-                        <td className={cn("p-0 border-b", tdBg)}>
+                        <td className={cn("p-0 border-b", tdBg, groupTopCls)}>
                           <Cell value={c?.returned ?? 0} readOnly={readOnly} onSave={(v) => saveCell(row.store.id, row.ptype.id, d, "returned", v ?? 0)} />
                         </td>
-                        <td className={cn("p-0 border-b", tdBg)}>
+                        <td className={cn("p-0 border-b", tdBg, groupTopCls)}>
                           <Cell
                             value={c?.manual ?? null}
                             autoValue={c?.isAuto ? (c.effective as number) : null}
@@ -635,7 +648,8 @@ function DesktopTable({
                         <td className={cn(
                           "px-2 py-1 text-right border-r border-b font-medium",
                           isToday ? "bg-[#f0f4ff]" : "bg-accent/5",
-                          realText
+                          realText,
+                          groupTopCls,
                         )}>
                           {c?.realized != null ? fmt(c.realized) : "—"}
                         </td>
