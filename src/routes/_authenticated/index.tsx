@@ -302,7 +302,7 @@ function Dashboard() {
                         label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                       >
                         {byType.map((t, i) => (
-                          <Cell key={i} fill={TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length]} />
+                          <Cell key={i} fill={t.color ?? COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(v: any) => fmt(Number(v))} />
