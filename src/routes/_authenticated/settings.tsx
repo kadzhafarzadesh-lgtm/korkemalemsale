@@ -15,6 +15,8 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Loader2, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createUser, deleteUser, setUserActive } from "@/lib/admin-users.functions";
+import { PRODUCT_COLOR_PALETTE, normalizeProductColor } from "@/lib/product-colors";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
