@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 
 export const Route = createFileRoute("/_authenticated/today")({
   component: TodayPage,
