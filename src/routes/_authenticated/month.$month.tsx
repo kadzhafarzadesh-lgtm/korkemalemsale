@@ -31,7 +31,7 @@ type Entry = {
 
 type Store = { id: string; name: string; counterparty_id: string | null };
 type Counterparty = { id: string; name: string };
-type PType = { id: string; name: string };
+type PType = { id: string; name: string; color: string | null };
 
 const MAX_VAL = 999999;
 
