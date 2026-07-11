@@ -13,6 +13,7 @@ import { CalendarIcon, Download } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import * as XLSX from "xlsx";
+import { productRowStyle, productDotStyle } from "@/lib/product-colors";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
