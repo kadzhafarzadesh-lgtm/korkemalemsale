@@ -136,7 +136,7 @@ function Dashboard() {
   });
   const { data: ptypes = [] } = useQuery({
     queryKey: ["ptypes"],
-    queryFn: async () => (await supabase.from("product_types").select("id,name").order("sort_order").order("name")).data ?? [],
+    queryFn: async () => (await supabase.from("product_types").select("id,name,color").order("sort_order").order("name")).data ?? [],
   });
 
   const filtered = useMemo(() => {
