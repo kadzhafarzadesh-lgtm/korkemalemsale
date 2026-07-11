@@ -313,8 +313,14 @@ function ReportsPage() {
               </tr></thead>
               <tbody>
                 {filteredSales.map((r, i) => (
-                  <tr key={i} className="border-t hover:bg-muted/30">
-                    <td className="px-3 py-1.5">{storeName(r.store_id)}</td><td>{ptName(r.product_type_id)}</td>
+                  <tr key={i} className="border-t hover:bg-muted/30" style={productRowStyle(ptColor(r.product_type_id))}>
+                    <td className="px-3 py-1.5">{storeName(r.store_id)}</td>
+                    <td>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={productDotStyle(ptColor(r.product_type_id))} aria-hidden />
+                        {ptName(r.product_type_id)}
+                      </span>
+                    </td>
                     <td className="text-right num">{fmt(r.posted)}</td><td className="text-right num">{fmt(r.returned)}</td>
                     <td className={"text-right num font-medium " + (r.realized < 0 ? "text-destructive" : "")}>{fmt(r.realized)}</td>
                     <td className="text-right num">{fmt(r.opening)}</td><td className="text-right num pr-3">{fmt(r.closing)}</td>
