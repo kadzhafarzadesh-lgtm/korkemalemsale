@@ -36,6 +36,21 @@ function StockPage() {
     queryFn: async () =>
       (await supabase.from("counterparties").select("id,name").order("sort_order").order("name")).data ?? [],
   });
+  const { data: cps = [] } = useQuery({
+    queryKey: ["counterparties"],
+    queryFn: async () =>
+      (await supabase.from("counterparties").select("id,name").order("sort_order").order("name")).data ?? [],
+  });
+  const { data: ptypesColors = [] } = useQuery({
+    queryKey: ["ptypes"],
+    queryFn: async () =>
+      (await supabase.from("product_types").select("id,color").order("sort_order").order("name")).data ?? [],
+  });
+  const colorByPtype = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const p of ptypesColors as any[]) m.set(p.id, p.color ?? null);
+    return m;
+  }, [ptypesColors]);
   const { data: lastRevs = [] } = useQuery({
     queryKey: ["last-revisions"],
     queryFn: async () =>
