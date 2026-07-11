@@ -36,11 +36,6 @@ function StockPage() {
     queryFn: async () =>
       (await supabase.from("counterparties").select("id,name").order("sort_order").order("name")).data ?? [],
   });
-  const { data: cps = [] } = useQuery({
-    queryKey: ["counterparties"],
-    queryFn: async () =>
-      (await supabase.from("counterparties").select("id,name").order("sort_order").order("name")).data ?? [],
-  });
   const { data: ptypesColors = [] } = useQuery({
     queryKey: ["ptypes"],
     queryFn: async () =>
