@@ -166,7 +166,8 @@ function ReportsPage() {
 
 
   const storeName = (id: string) => stores.find(s => s.id === id)?.name ?? "—";
-  const ptName = (id: string) => ptypes.find(p => p.id === id)?.name ?? "—";
+  const ptName = (id: string) => ptypes.find((p: any) => p.id === id)?.name ?? "—";
+  const ptColor = (id: string): string | null => ((ptypes.find((p: any) => p.id === id) as any)?.color ?? null);
 
   const totals = useMemo(() => filteredSales.reduce((a, r) => ({
     posted: a.posted + r.posted, returned: a.returned + r.returned, realized: a.realized + r.realized,
