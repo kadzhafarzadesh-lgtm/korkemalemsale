@@ -227,13 +227,17 @@ function MonthPage() {
       const openingRaw = getDay(store.id, ptype.id, 1)?.opening_balance;
       const hasOpeningEntered = openingRaw != null && +openingRaw !== 0;
       const carry = carryMap.get(k) ?? null;
-      // Use entered opening if non-zero; else carry from previous month if available; else 0/null.
-      const opening: number | null = hasOpeningEntered
+      // Приоритет: явный ввод > перенос из предыдущего месяца > 0.
+      // ВАЖНО: если opening не задан и переноса нет — считаем 0 (не null),
+      // иначе цепочка base=null не даёт посчитать реализацию, когда Факт.ост.
+      // введён позже (типовая жалоба: посадили Пост., позже ввели Факт.ост.,
+      // а Реал. не отображается).
+      const opening: number = hasOpeningEntered
         ? +openingRaw!
-        : (carry != null ? carry : (openingRaw != null ? +openingRaw : null));
+        : (carry != null ? carry : (openingRaw != null ? +openingRaw : 0));
       const openingAuto = !hasOpeningEntered && carry != null;
 
-      let prevEffective: number | null = opening;
+      let prevEffective: number = opening;
       for (let d = 1; d <= days; d++) {
         const e = getDay(store.id, ptype.id, d);
         const posted = +(e?.posted ?? 0);
@@ -243,24 +247,20 @@ function MonthPage() {
         const hasManual = manualRaw != null && !Number.isNaN(+manualRaw);
         const manual: number | null = hasManual ? +manualRaw! : null;
 
-        const base: number | null = d === 1 ? opening : prevEffective;
+        const base: number = d === 1 ? opening : prevEffective;
 
-        let effective: number | null;
+        let effective: number;
         let realized: number | null;
         let isAuto: boolean;
         if (manual != null) {
           effective = manual;
-          realized = base != null ? base + posted - returned - writtenOff - manual : null;
+          realized = base + posted - returned - writtenOff - manual;
           isAuto = false;
-        } else if (base != null) {
-          // Auto: pretend actual = base + posted - returned - written_off, so realized = 0
+        } else {
+          // Авто: считаем факт = base + Пост. − Возвр. − Списание; Реал. = 0
           effective = base + posted - returned - writtenOff;
           realized = 0;
           isAuto = true;
-        } else {
-          effective = null;
-          realized = null;
-          isAuto = false;
         }
 
         map.set(`${store.id}|${ptype.id}|${d}`, {
